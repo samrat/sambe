@@ -10,10 +10,17 @@ type token = Ident of string
            | Equals
 
 type lexer_state = { mutable line_num: int; mutable column: int;
-                     stm: char Stream.t }
+                     stm: char Stream.t; mutable next_token: token option }
 
 let open_stream file = { line_num = 1; column = 1;
-                         stm = Stream.of_channel (open_in file) }
+                         stm = Stream.of_channel (open_in file);
+                         next_token = None
+                       }
+
+let stream_of_string s = { line_num = 1; column = 1;
+                           stm = Stream.of_string s;
+                           next_token = None
+                         }
 (* TODO: Update line_num and column *)
 let read_char ls =
   Stream.next ls.stm
@@ -29,13 +36,19 @@ let is_ident_start c =
   match c with
   | '$' | ':' | '@' | '%' -> true
   | _ -> false
+    
+let is_valid_ident_char =
+  function
+  | '_' | '.' | '-' -> true
+  | c when is_digit c -> true
+  | _ -> false
 
 let read_ident ls =
   let buf = Buffer.create 32 in
   let rec read_ident' () =
     match peek_char ls with
     | Some c ->
-      if is_alpha c || is_ident_start c 
+      if is_alpha c || is_ident_start c || is_valid_ident_char c
       then
         let _ = read_char ls in
         let _ = (Buffer.add_char buf c) in
@@ -49,7 +62,9 @@ let read_keyword ls =
   | Ident(id) -> begin 
       match id with
       (* TODO: add all other instructions *)
-      | "type" | "function" | "data" | "call" | "ret" -> Keyword(id)
+      | "type" | "function" | "data"
+      | "phi" 
+      | "call" | "ret" | "sub" | "storel" -> Keyword(id)
       | _ -> Ident(id)
     end
   | _ -> failwith "expected ident"
@@ -70,7 +85,7 @@ let read_int ls =
 
 let rec skip_whitespace ls =
   match peek_char ls with
-  | Some(' ') | Some('\n') ->
+  | Some(' ') | Some('\n') | Some('\t') ->
     let _ = read_char ls in
     skip_whitespace ls
   | Some(c) -> ()
@@ -115,21 +130,37 @@ let rec skip_comment ls =
     let _ = read_char ls in
     skip_comment ls
   | None -> ()
-    
 
-let rec next_token ls =
-  skip_whitespace ls;
-  match peek_char ls with
-  | Some(c) when is_ident_start c -> read_ident ls
-  | Some(c) when is_alpha c -> read_keyword ls
-  | Some(c) when is_digit c -> read_int ls
-  | Some('"') -> read_string ls
-  | Some('#') ->
-    let _ = skip_comment ls in
-    next_token ls
-  | Some(c) -> read_symbol ls c
-  | None -> failwith "No more tokens"
 
+let rec peek_token ls =
+  match ls.next_token with
+  | None -> 
+    let _ = ls.next_token <- Some(next_token ls) in
+    begin
+    match ls.next_token with
+    | Some(tok) -> tok
+    | None -> failwith "no more tokens"
+    end
+  | Some(tok) -> tok
+and next_token ls =
+  match ls.next_token with
+  | Some(tok) ->
+    let _ = ls.next_token <- None
+    in tok
+  | None ->
+    begin
+      skip_whitespace ls;
+      match peek_char ls with
+      | Some(c) when is_ident_start c -> read_ident ls
+      | Some(c) when is_alpha c -> read_keyword ls
+      | Some(c) when is_digit c -> read_int ls
+      | Some('"') -> read_string ls
+      | Some('#') ->
+        let _ = skip_comment ls in
+        next_token ls
+      | Some(c) -> read_symbol ls c
+      | None -> failwith "No more tokens"
+    end
 (* 
 
 [Keyword("data"); Ident("$str"); Equals; LBrace; Ident("b"); String("hello world"); Comma;  Ident("b"); Integer(0); RBrace]
