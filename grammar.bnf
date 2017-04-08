@@ -1,0 +1,52 @@
+BASETY := 'w' | 'l' | 's' | 'd'  # Base types
+EXTTY  := BASETY    | 'b' | 'h'  # Extended types
+CONST :=
+    ['-'] NUMBER  # Decimal integer
+  | 's_' FP       # Single-precision float
+  | 'd_' FP       # Double-precision float
+  | $IDENT        # Global symbol
+TYPEDEF :=
+    # Regular type
+    'type' :IDENT '=' [ 'align' NUMBER ]
+    '{'
+        ( EXTTY [ NUMBER ] ),
+    '}'
+  | # Opaque type
+    'type' :IDENT '=' 'align' NUMBER '{' NUMBER '}'
+
+DATADEF :=
+    ['export'] 'data' $IDENT '='
+    '{'
+        ( EXTTY DATAITEM+
+        | 'z'   NUMBER ),
+    '}'
+
+DATAITEM :=
+    $IDENT [ '+' NUMBER ]  # Symbol and offset
+  |  '"' ... '"'           # String
+  |  CONST                 # Constant
+
+FUNCDEF :=
+    ['export'] 'function' [BASETY | :IDENT] $IDENT PARAMS
+    '{'
+       BLOCK+
+    '}'
+
+PARAMS := '(' ( (BASETY | :IDENT) %IDENT ), ')'
+
+BLOCK :=
+    @IDENT    # Block label
+    PHI*      # Phi instructions
+    INST*     # Regular instructions
+    JUMP      # Jump or return
+
+JUMP :=
+    'jmp' @IDENT               # Unconditional
+  | 'jnz' VAL, @IDENT, @IDENT  # Conditional
+  | 'ret' [ VAL ]              # Return
+
+CALL := [ %IDENT '=' ( BASETY | :IDENT ) ] 'call' VAL PARAMS
+
+PARAMS := '(' ( (BASETY | :IDENT) %IDENT ), ')'
+
+PHI := %IDENT '=' BASETY 'phi' ( @IDENT VAL ),
