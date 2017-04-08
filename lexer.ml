@@ -63,7 +63,7 @@ let read_keyword ls =
       match id with
       (* TODO: add all other instructions *)
       | "type" | "function" | "data"
-      | "phi"
+      | "phi" | "add" | "mul" | "cgtd" | "jnz"
       | "call" | "ret" | "sub" | "storel" -> Keyword(id)
       | _ -> Ident(id)
     end

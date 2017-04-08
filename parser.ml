@@ -10,9 +10,11 @@ type ty = BaseTy of basety
         | AggTy of string       (* aggregated type *)
 
 type instr = Assign of qbe * basety * instr (* dest * type * instr *)
+           (* op arg1, arg2, arg3 *)
+           | Instr3 of string * qbe * qbe * qbe
            | Instr2 of string * qbe * qbe   (* op arg1, arg2 *)
            | Instr1 of string * qbe         (* op arg1 *)
-           | Phi of (string * string) list  (* phi  *)
+           | Phi of (qbe * qbe) list  (* phi  *)
 and qbe =
   (* const *)
   | Number of int
@@ -49,7 +51,7 @@ and qbe =
 
 let expect ls tok =
   match peek_token ls with
-  | tok -> begin next_token ls; () end
+  | t when t = tok -> ignore (next_token ls)
   | _ -> failwith "expected ..."
 
 let get_op (kw : token) =
@@ -57,9 +59,10 @@ let get_op (kw : token) =
   | Keyword(op) -> op
   | _ -> failwith "should have been a keyword"
 
-let get_arg (ident : token) =
+let get_arg (ident : token) : qbe =
   match ident with
-  | Ident(arg) -> arg
+  | Ident(arg) -> Ident(arg)
+  | Integer(n) -> Number(n)
   | _ -> failwith "should have been an ident"
 
 let get_rettype (tystr : token) =
@@ -80,7 +83,7 @@ let parse_instruction ls =
   match peek_token ls with
   | Ident(dest) ->
     begin
-      next_token ls;
+      ignore (next_token ls);
       expect ls Equals;
       let rettype = next_token ls in
       let op = get_op (next_token ls) in
@@ -97,31 +100,80 @@ let parse_instruction ls =
         if peek_token ls = Comma
         then
           begin
-            next_token ls;
+            ignore (next_token ls);
             let arg2 = next_token ls in
             Assign(Ident(dest), get_rettype rettype,
-                   Instr2(op, Ident(get_arg arg1), Ident(get_arg arg2)))
+                   Instr2(op, get_arg arg1, get_arg arg2))
           end
         else
           Assign(Ident(dest), get_rettype rettype,
-                 Instr1(op, Ident(get_arg arg1)))
+                 Instr1(op, get_arg arg1))
     end
   | Keyword(op) ->
     begin
-      next_token ls;
+      ignore (next_token ls);
       let arg1 = get_arg (next_token ls) in
       if (peek_token ls) = Comma
       then begin
-        next_token ls;
+        ignore (next_token ls);
         let arg2 = get_arg (next_token ls) in
-        Instr2(op, Ident(arg1), Ident(arg2))
+        if peek_token ls = Comma
+        then
+          begin
+            ignore (next_token ls);
+            let arg3 = get_arg (next_token ls) in
+            Instr3(op, arg1, arg2, arg3)
+          end
+        else Instr2(op, arg1, arg2)
       end
       else
-        Instr1(op, Ident(arg1))
+        Instr1(op, arg1)
     end
-  | _ -> failwith "NYI"
+  | _ -> failwith "expected keyword or ident"
 
 
+let is_phi_instr i =
+  match i with
+  | Assign(_, _, Phi(_)) -> true
+  | _ -> false
+
+(* last instruction of block is always a jump or return(by definiton
+   of basic block) *)
+let is_last_instr i =
+  match i with
+  | Instr1("ret", _) | Instr3("jnz", _, _, _) -> true
+  | _ -> false
+(*
+BLOCK :=
+    @IDENT    # Block label
+    PHI*      # Phi instructions
+    INST*     # Regular instructions
+    JUMP      # Jump or return
+ *)
+let parse_block ls =
+  let rec parse_phi_instrs acc =
+    let next_instr = (parse_instruction ls) in
+    if is_phi_instr next_instr
+    then parse_phi_instrs (next_instr :: acc)
+    else (List.rev acc, next_instr) in
+  (* Regular instructions *)
+  let rec parse_reg_instrs acc =
+    let next_instr = (parse_instruction ls) in
+    if is_last_instr next_instr
+    then (List.rev acc, next_instr)
+    else parse_reg_instrs (next_instr :: acc)
+  in
+  match peek_token ls with
+  | Ident(label) ->
+    begin
+      ignore (next_token ls);
+      (* phi instructions *)
+      let (phis, next_instr) = parse_phi_instrs [] in
+      let (instrs, last_instr) = parse_reg_instrs [] in
+      let instrs = next_instr :: instrs in
+      Block(label, phis, instrs, last_instr)
+    end
+  | _ -> failwith "expected block label"
 
 
 (*
