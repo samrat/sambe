@@ -1,5 +1,5 @@
 open Lexer
-    
+
 type basety = S | D | W | L
             | Z                 (* TODO: where should Z go? *)
 type extty =                    (* extended types *)
@@ -21,13 +21,13 @@ and qbe =
 
   (* for DataDef *)
   | IdentOffset of string * int
-      
+
   (* typedef *)
-  | TypeDef of 
+  | TypeDef of
       string *                    (* name *)
       (ty * int) list *           (* fields *)
       int option                  (* alignment *)
-        
+
   (* datadef *)
   | DataDef of
       bool *                    (* export? *)
@@ -40,7 +40,7 @@ and qbe =
       string *                  (* name *)
       (ty * string) list *      (* params *)
       qbe list                  (* block list *)
-        
+
   | Block of
       string *                  (* block name *)
       instr list *              (* phi instrs *)
@@ -73,8 +73,8 @@ let get_rettype (tystr : token) =
       | "l" -> L
       | _ -> failwith "NYI"
     end
-  | _ -> failwith "expected string" 
-      
+  | _ -> failwith "expected string"
+
 
 let parse_instruction ls =
   match peek_token ls with
@@ -92,12 +92,12 @@ let parse_instruction ls =
         let var2 = get_arg (next_token ls) in
         Assign(Ident(dest), get_rettype rettype,
                Phi([(src1, var1); (src2, var2)]))
-      else 
+      else
         let arg1 = next_token ls in
         if peek_token ls = Comma
         then
           begin
-            next_token ls; 
+            next_token ls;
             let arg2 = next_token ls in
             Assign(Ident(dest), get_rettype rettype,
                    Instr2(op, Ident(get_arg arg1), Ident(get_arg arg2)))
@@ -149,7 +149,7 @@ data $b = { z 1000 }
 => DataDef(false, "b", [(Z, [1000])])
 
 data $c = { l -1, l $c }
-=> 
+=>
 
 
 FunDef(false, BaseTy(W), "foobar", [], [Block("foo", [Phi], [], Ret)]);;

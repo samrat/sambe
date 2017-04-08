@@ -36,7 +36,7 @@ let is_ident_start c =
   match c with
   | '$' | ':' | '@' | '%' -> true
   | _ -> false
-    
+
 let is_valid_ident_char =
   function
   | '_' | '.' | '-' -> true
@@ -59,11 +59,11 @@ let read_ident ls =
 
 let read_keyword ls =
   match read_ident ls with
-  | Ident(id) -> begin 
+  | Ident(id) -> begin
       match id with
       (* TODO: add all other instructions *)
       | "type" | "function" | "data"
-      | "phi" 
+      | "phi"
       | "call" | "ret" | "sub" | "storel" -> Keyword(id)
       | _ -> Ident(id)
     end
@@ -126,7 +126,7 @@ let rec skip_comment ls =
   | Some('\n') ->
     let _ = read_char ls in
     ()
-  | Some(c) -> 
+  | Some(c) ->
     let _ = read_char ls in
     skip_comment ls
   | None -> ()
@@ -134,7 +134,7 @@ let rec skip_comment ls =
 
 let rec peek_token ls =
   match ls.next_token with
-  | None -> 
+  | None ->
     let _ = ls.next_token <- Some(next_token ls) in
     begin
     match ls.next_token with
@@ -161,7 +161,7 @@ and next_token ls =
       | Some(c) -> read_symbol ls c
       | None -> failwith "No more tokens"
     end
-(* 
+(*
 
 [Keyword("data"); Ident("$str"); Equals; LBrace; Ident("b"); String("hello world"); Comma;  Ident("b"); Integer(0); RBrace]
 
