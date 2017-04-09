@@ -25,9 +25,17 @@ let stream_of_string s = { line_num = 1; column = 1;
                            stm = Stream.of_string s;
                            next_token = None
                          }
-(* TODO: Update line_num and column *)
+
 let read_char ls =
-  Stream.next ls.stm
+  let c = Stream.next ls.stm in
+  let _ = ls.column <- ls.column + 1 in
+  if c = '\n'
+  then begin
+    (ls.line_num <- ls.line_num + 1);
+    (ls.column <- 1);
+    c
+  end
+  else c
 let peek_char ls = Stream.peek ls.stm
 
 let is_digit c = let code = Char.code c in
