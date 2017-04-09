@@ -3,8 +3,6 @@ open Util
 open ExtLib
 
 (* TODO:
-- Handle Blocks ending without a jump/return
-   Insert a jump to the next block
 - Phi currently assumes it will be passed two args.
 *)
 
@@ -26,6 +24,10 @@ type instr = Assign of qbe * basety * instr (* dest * type * instr *)
            | Instr2 of string * qbe * qbe   (* op arg1, arg2 *)
            | Instr1 of string * qbe         (* op arg1 *)
            | Instr0 of string
+           (* used when last instruction of a block is not a
+              jmp/return. This needs to be later replaced by a jump to
+              the block that immediately follows the current one *)
+           | JmpFixup
            | Phi of (qbe * qbe) list  (* phi  *)
 and qbe =
   (* const *)
@@ -242,7 +244,13 @@ let parse_block ls =
           | Some(i) -> [i]) in
       let instrs = parse_reg_instrs [] in
       let instrs = next_instr' @ instrs in
-      let last_instr = parse_instruction ls in
+
+      let last_instr = match remaining_block_size ls with
+        | Some(0) ->
+          JmpFixup
+        | Some(1) -> parse_instruction ls
+        | _ -> failwith "there should be at most one instruction between regular instructions and the next block"
+      in
       Block(label, phis, instrs, last_instr)
     end
   | _ -> failwith "expected block label"
@@ -284,8 +292,22 @@ let parse_function ls export =
     if peek_token ls = RBrace
     then
       begin
-        ignore (next_token ls);
-        List.rev acc
+        ignore (next_token ls); (* RBrace *)
+        let last_block = List.hd acc in
+        let final_blocks = List.rev (List.tl acc) in
+        List.fold_right
+          (fun block (next_block, acc) -> match block with
+             | Block(label, phis, instrs, JmpFixup) ->
+               let next_block_label = match next_block with
+                 | Block(next_block_label, _, _, _) -> next_block_label
+                 | _ -> failwith "expected block" in
+               let new_block =
+                 Block(label, phis, instrs,
+                       Instr1("jmp", BlockLabel(next_block_label))) in
+               (new_block, new_block :: acc)
+             | _ -> (block, block::acc))
+          final_blocks
+          (last_block, [])
       end
     else parse_blocks ((parse_block ls) :: acc)
   in
@@ -299,7 +321,7 @@ let parse_function ls export =
       let name = get_arg (next_token ls) in
       let params = get_params ls in
       let _ = expect ls LBrace in
-      let blocks = parse_blocks [] in
+      let (_, blocks) = parse_blocks [] in
       FunDef(export, BaseTy(rettype), name, params, blocks)
     end
   | _ -> failwith "expected 'function'"
@@ -336,6 +358,6 @@ FunDef(false, BaseTy(W), "foobar", [], [Block("foo", [Phi], [], Ret)]);;
 
 *)
 
-let () =
-  let ls = open_stream "mandel.ssa" in
-  ignore (Printf.printf "%s" (dump (parse_function ls true)))
+(* let () = *)
+(*   let ls = open_stream "mandel.ssa" in *)
+(*   ignore (Printf.printf "%s" (dump (parse_function ls true))) *)
