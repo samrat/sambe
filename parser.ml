@@ -1,12 +1,11 @@
 open Lexer
+open Util
 open ExtLib
 
 (* TODO:
 - Handle Blocks ending without a jump/return
    Insert a jump to the next block
-
-- Instead of all identifiers being Ident, there should be different
-  constructors for all the different sigils
+- Phi currently assumes it will be passed two args.
 *)
 
 type basety = S | D | W | L
@@ -31,8 +30,13 @@ type instr = Assign of qbe * basety * instr (* dest * type * instr *)
 and qbe =
   (* const *)
   | Number of int
+  (* TODO: handle different sizes *)
   | Float of float
-  | Ident of string
+  | Double of float
+  | BlockLabel of string
+  | AggType of string
+  | FuncIdent of string
+  | GlobalIdent of string
 
   (* for DataDef *)
   | IdentOffset of string * int
@@ -72,11 +76,26 @@ let get_op (kw : token) =
   | Keyword(op) -> op
   | _ -> failwith (Printf.sprintf "expected a keyword: %s" (dump kw))
 
+let ident_of_string s =
+  match explode s with
+  | '@'::id -> BlockLabel(implode id)
+  | ':'::id -> AggType(implode id)
+  | '$'::id -> GlobalIdent(implode id)
+  | '%'::id -> FuncIdent(implode id)
+  | _ -> failwith (Printf.sprintf "not a valid identifier sigil: %s" (dump s))
+
+let ident_of_token t =
+  match t with
+  | Ident(id) -> ident_of_string id
+  | _ -> failwith "expected ident token"
+
 let get_arg (ident : token) : qbe =
   match ident with
-  | Ident(arg) -> Ident(arg)
+  | Ident(arg) -> ident_of_string arg
   | Integer(n) -> Number(n)
-  | _ -> failwith "should have been an ident"
+  | Float(f) -> Float(f)
+  | Double(d) -> Double(d)
+  | _ -> failwith (Printf.sprintf "should have been an ident: %s" (dump ident))
 
 let get_type (tystr : token) =
   match tystr with
@@ -91,33 +110,20 @@ let get_type (tystr : token) =
     end
   | _ -> failwith "expected string"
 
-let explode s =
-  let rec expl i l =
-    if i < 0 then l else
-    expl (i - 1) (s.[i] :: l) in
-  expl (String.length s - 1) [];;
 
-let ident_type (id : token) =
+let ident_type (id : qbe) =
   match id with
-  | Ident(id) ->
-    begin
-    match explode id with
-    | '@'::_ -> BlockIdent
-    | ':'::_ -> AggType
-    | '$'::_ -> GlobalIdent
-    | '%'::_ -> FuncIdent
-    | _ -> failwith (Printf.sprintf "not a valid identifier sigil: %s" (dump id))
-    end
-  | _ -> failwith (Printf.sprintf "expected ident but got %s" (dump id))
-
+  | BlockLabel(_) -> BlockIdent
+  | AggType(_) -> AggType
+  | GlobalIdent(_) -> GlobalIdent
+  | FuncIdent(_) -> FuncIdent
+  | _ -> failwith "not an ident"
 
 let parse_instruction ls =
   match peek_token ls with
   | Ident(dest) ->
     begin
       ignore (next_token ls);
-      let _ = print_string dest in
-      let _ = print_string "      \n" in
       expect ls Equals;
       let rettype = next_token ls in
       let op = get_op (next_token ls) in
@@ -127,7 +133,7 @@ let parse_instruction ls =
         let _ = expect ls Comma in
         let src2 = get_arg (next_token ls) in
         let var2 = get_arg (next_token ls) in
-        Assign(Ident(dest), get_type rettype,
+        Assign((ident_of_string dest), get_type rettype,
                Phi([(src1, var1); (src2, var2)]))
       else
         let arg1 = next_token ls in
@@ -136,18 +142,21 @@ let parse_instruction ls =
           begin
             ignore (next_token ls);
             let arg2 = next_token ls in
-            Assign(Ident(dest), get_type rettype,
+            Assign((ident_of_string dest), get_type rettype,
                    Instr2(op, get_arg arg1, get_arg arg2))
           end
         else
-          Assign(Ident(dest), get_type rettype,
+          Assign((ident_of_string dest), get_type rettype,
                  Instr1(op, get_arg arg1))
     end
   | Keyword(op) ->
     begin
       ignore (next_token ls);
       if op = "ret" &&
-         ident_type (peek_token ls) = BlockIdent
+         (match (peek_token ls) with
+          | Ident(id) -> if ident_type (ident_of_string id) = BlockIdent
+            then true else false
+          | _ -> false)
       then Instr0("ret")
       else
         let arg1 = get_arg (next_token ls) in
@@ -188,12 +197,14 @@ let is_last_instr i =
    has already ended(next token is new block label or is RBrace) *)
 let remaining_block_size ls =
   match peek_token ls with
-    | Ident(id) -> if ident_type (Ident(id)) = BlockIdent then Some 0 else None
-    | Keyword(kw) -> (match kw with
-        | "jmp" | "jnz" | "ret" -> Some 1
-        | _ -> None)
-    | RBrace -> Some 0
-    | _ -> None
+  | Ident(id) ->
+    if ident_type (ident_of_token (Ident(id))) = BlockIdent
+    then Some 0 else None
+  | Keyword(kw) -> (match kw with
+      | "jmp" | "jnz" | "ret" -> Some 1
+      | _ -> None)
+  | RBrace -> Some 0
+  | _ -> None
 
 (*
 BLOCK :=
@@ -325,6 +336,6 @@ FunDef(false, BaseTy(W), "foobar", [], [Block("foo", [Phi], [], Ret)]);;
 
 *)
 
-(* let () = *)
-(*   let ls = open_stream "mandel.ssa" in *)
-(*   ignore (Printf.printf "%s" (dump (parse_function ls true))) *)
+let () =
+  let ls = open_stream "mandel.ssa" in
+  ignore (Printf.printf "%s" (dump (parse_function ls true)))

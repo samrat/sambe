@@ -1,6 +1,9 @@
+open Util
+
 type token = Ident of string
            | Integer of int
            | Float of float     (* TODO: f32 and f64 *)
+           | Double of float
            | Keyword of string
            | String of string
            | LParen | RParen
@@ -8,6 +11,7 @@ type token = Ident of string
            | Comma
            | Pound
            | Equals
+
 
 type lexer_state = { mutable line_num: int; mutable column: int;
                      stm: char Stream.t; mutable next_token: token option }
@@ -65,7 +69,10 @@ let read_keyword ls =
       | "type" | "function" | "data"
       | "phi" | "add" | "mul" | "cgtd" | "jnz" | "jmp" | "csgtw"
       | "call" | "ret" | "sub" | "storel" | "copy" -> Keyword(id)
-      | _ -> Ident(id)
+      | f -> (match explode f with
+          | 's'::'_'::flt -> Float(float_of_string (implode flt))
+          | 'd'::'_'::flt -> Double(float_of_string (implode flt))
+          | _ -> Ident(id))
     end
   | _ -> failwith "expected ident"
 
