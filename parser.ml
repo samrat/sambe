@@ -295,6 +295,7 @@ let parse_function ls export =
         ignore (next_token ls); (* RBrace *)
         let last_block = List.hd acc in
         let final_blocks = List.rev (List.tl acc) in
+        (* TODO: check that last block isn't missing jump instr *)
         List.fold_right
           (fun block (next_block, acc) -> match block with
              | Block(label, phis, instrs, JmpFixup) ->

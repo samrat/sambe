@@ -1,4 +1,5 @@
 open Util
+open Instr
 
 type token = Ident of string
            | Integer of int
@@ -73,10 +74,8 @@ let read_keyword ls =
   match read_ident ls with
   | Ident(id) -> begin
       match id with
-      (* TODO: add all other instructions *)
-      | "type" | "function" | "data"
-      | "phi" | "add" | "mul" | "cgtd" | "jnz" | "jmp" | "csgtw"
-      | "call" | "ret" | "sub" | "storel" | "copy" -> Keyword(id)
+      | "type" | "function" | "data" -> Keyword(id)
+      | _ when is_instruction_op id -> Keyword(id)
       | f -> (match explode f with
           | 's'::'_'::flt -> Float(float_of_string (implode flt))
           | 'd'::'_'::flt -> Double(float_of_string (implode flt))
