@@ -10,7 +10,10 @@ open ExtLib
 *)
 
 type basety = S | D | W | L
-            | Z                 (* TODO: where should Z go? *)
+            (* NOTE: Z appears only in data-defs. It specifies a
+               size. For example: `z 100` would mean 100 zero-initialized
+               bytes *)
+            | Z
 type extty =                    (* extended types *)
   | B | H
 
