@@ -112,6 +112,7 @@ let get_type (tystr : token) =
       | "w" -> BaseTy(W)
       | "l" -> BaseTy(L)
       | "b" -> ExtTy(B)
+      | "z" -> BaseTy(Z)
       | _ -> failwith (Printf.sprintf "not a type: %s" (dump ty))
     end
   | _ -> failwith "expected string"
@@ -332,6 +333,7 @@ let parse_function ls export =
   | _ -> failwith "expected 'function'"
 
 
+(* TODO: handle opaque types *)
 let parse_typedef ls =
   let rec parse_items acc =
     match peek_token ls with

@@ -10,6 +10,7 @@ let suite =
  "instr_test">:: instruction_test;
  "typedef_test">:: typedef_test;
  "datadef_test">:: datadef_test;
+ "datadef_test2">:: datadef_test2;
  
  "lexer">:: test_lexer;
   ]

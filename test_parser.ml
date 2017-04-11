@@ -18,6 +18,13 @@ let datadef_test _ =
              [(BaseTy W, [Number 1; Number 2; Number 3]); (ExtTy B, [Number 0])]) in
   assert_equal (parse_datadef stream false) expected
 
+let datadef_test2 _ =
+  let stream =
+    stream_of_string "data $b = { z 1000 }" in
+  let expected =
+    DataDef (true, GlobalIdent "b", [(BaseTy Z, [Number 1000])]) in
+  assert_equal (parse_datadef stream true) expected
+
 let instruction_test _ =
   let instr_stream = 
     stream_of_string "%n1 =w phi @start %num, @loop1 %n2" in
