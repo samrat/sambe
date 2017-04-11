@@ -21,7 +21,7 @@ type ty = BaseTy of basety
 type ident_ty = BlockIdent | AggType | FuncIdent | GlobalIdent
 
 
-type instr = Assign of qbe * basety * instr (* dest * type * instr *)
+type instr = Assign of qbe * ty * instr (* dest * type * instr *)
            (* op arg1, arg2, arg3 *)
            | Instr3 of string * qbe * qbe * qbe
            | Instr2 of string * qbe * qbe   (* op arg1, arg2 *)
@@ -55,7 +55,7 @@ and qbe =
   (* datadef *)
   | DataDef of
       bool *                    (* export? *)
-      string *                  (* name *)
+      qbe *                     (* name *)
       (ty * (qbe list)) list    (* dataitems *)
 
   | FunDef of
@@ -107,10 +107,11 @@ let get_type (tystr : token) =
   | Ident(ty) ->
     begin
       match ty with
-      | "s" -> S
-      | "d" -> D
-      | "w" -> W
-      | "l" -> L
+      | "s" -> BaseTy(S)
+      | "d" -> BaseTy(D)
+      | "w" -> BaseTy(W)
+      | "l" -> BaseTy(L)
+      | "b" -> ExtTy(B)
       | _ -> failwith (Printf.sprintf "not a type: %s" (dump ty))
     end
   | _ -> failwith "expected string"
@@ -266,7 +267,7 @@ let get_params ls =
       ignore (next_token ls);
       let ty = get_type (Ident(t)) in
       let param = get_arg (next_token ls) in
-      let new_params = ((BaseTy(ty), param) :: acc) in
+      let new_params = (ty, param) :: acc in
       if peek_token ls = Comma
       then begin
         ignore (next_token ls);
@@ -326,7 +327,7 @@ let parse_function ls export =
       let _ = expect ls LBrace in
       let (_, blocks) = parse_blocks [] in
       expect ls RBrace;
-      FunDef(export, BaseTy(rettype), name, params, blocks)
+      FunDef(export, rettype, name, params, blocks)
     end
   | _ -> failwith "expected 'function'"
 
@@ -342,7 +343,7 @@ let parse_typedef ls =
       let num = (match peek_token ls with
           | Integer(n) -> ignore (next_token ls); n
           | _ -> 1) in
-      let newitems = ((BaseTy(item), num) :: acc) in
+      let newitems = ((item, num) :: acc) in
       if peek_token ls = Comma
       then begin
         ignore (next_token ls); 
@@ -369,6 +370,52 @@ let parse_typedef ls =
     (expect ls RBrace);
     TypeDef(type_name, items, alignment)
   | _ -> failwith "expected 'type'"
+
+
+let parse_datadef ls export =
+  let rec parse_items acc =
+    let rec parse_dataitems ds =
+      match peek_token ls with
+      | Comma | RBrace -> List.rev ds;
+      | Integer(n) ->
+        ignore (next_token ls);
+        parse_dataitems (Number(n)::ds)
+      | Float(n) ->
+        ignore (next_token ls);
+        parse_dataitems (Float(n)::ds)
+      | Double(n) ->
+        ignore (next_token ls);
+        parse_dataitems (Double(n)::ds)
+      | _ -> failwith "syntax error in dataitems"
+    in
+    match peek_token ls with
+    | RBrace -> List.rev acc
+    | Ident(ty) ->
+      begin
+      let ty = (get_type (Ident(ty))) in
+      ignore (next_token ls);
+      let dataitems = parse_dataitems [] in
+      let newitems = ((ty, dataitems) :: acc) in
+      if peek_token ls = Comma
+      then begin
+        ignore (next_token ls); 
+        parse_items newitems
+      end
+      else List.rev newitems
+      end
+    | _ -> failwith "syntax error in datadef"
+  in
+  match peek_token ls with
+  | Keyword("data") ->
+    ignore (next_token ls);
+    let data_name = get_arg (next_token ls) in
+    (expect ls Equals);
+    (expect ls LBrace);
+    let items = parse_items [] in
+    (expect ls RBrace);
+    DataDef(export, data_name, items)
+  | _ -> failwith "expected 'data'"
+
 
 (*
 

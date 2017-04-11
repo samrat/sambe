@@ -10,10 +10,18 @@ let typedef_test _ =
     TypeDef (AggType "cryptovector", [(BaseTy W, 4)], Some 16) in
   assert_equal (parse_typedef stream) expected
 
+let datadef_test _ =
+  let stream =
+    stream_of_string "data $a = { w 1 2 3, b 0 }" in
+  let expected =
+    DataDef (false, GlobalIdent "a",
+             [(BaseTy W, [Number 1; Number 2; Number 3]); (ExtTy B, [Number 0])]) in
+  assert_equal (parse_datadef stream false) expected
+
 let instruction_test _ =
   let instr_stream = 
     stream_of_string "%n1 =w phi @start %num, @loop1 %n2" in
-  let instr_expected = Assign (FuncIdent "n1", W,
+  let instr_expected = Assign (FuncIdent "n1", BaseTy W,
                                Phi
                                  [(BlockLabel "start", FuncIdent "num");
                                   (BlockLabel "loop1", FuncIdent "n2")]) in
@@ -27,14 +35,14 @@ let block_test _ =
 	%c =w cslew %n1, 0
 jnz %c, @end, @loop1" in
   let block_expected = Block ("@loop",
- [Assign (FuncIdent "n1", W,
+ [Assign (FuncIdent "n1", BaseTy W,
    Phi
     [(BlockLabel "start", FuncIdent "num");
      (BlockLabel "loop1", FuncIdent "n2")]);
-  Assign (FuncIdent "s0", W,
+  Assign (FuncIdent "s0", BaseTy W,
    Phi [(BlockLabel "start", Number 0); (BlockLabel "loop1", FuncIdent "s1")])],
- [Assign (FuncIdent "n2", W, Instr2 ("sub", FuncIdent "n1", Number 1));
-  Assign (FuncIdent "c", W, Instr2 ("cslew", FuncIdent "n1", Number 0))],
+ [Assign (FuncIdent "n2", BaseTy W, Instr2 ("sub", FuncIdent "n1", Number 1));
+  Assign (FuncIdent "c", BaseTy W, Instr2 ("cslew", FuncIdent "n1", Number 0))],
                               Instr3 ("jnz", FuncIdent "c", BlockLabel "end", BlockLabel "loop1"))
   in
   assert_equal (parse_block block_stream) block_expected
@@ -64,23 +72,23 @@ ret %s0
             [(BaseTy L, FuncIdent "arr"); (BaseTy W, FuncIdent "num")],
             [Block ("@start", [], [], Instr1 ("jmp", BlockLabel "@loop"));
              Block ("@loop",
-                    [Assign (FuncIdent "n1", W,
+                    [Assign (FuncIdent "n1", BaseTy W,
                              Phi
                                [(BlockLabel "start", FuncIdent "num");
                                 (BlockLabel "loop1", FuncIdent "n2")]);
-                     Assign (FuncIdent "s0", W,
+                     Assign (FuncIdent "s0", BaseTy W,
                              Phi
                                [(BlockLabel "start", Number 0); (BlockLabel "loop1", FuncIdent "s1")])],
-                    [Assign (FuncIdent "n2", W, Instr2 ("sub", FuncIdent "n1", Number 1));
-                     Assign (FuncIdent "c", W, Instr2 ("cslew", FuncIdent "n1", Number 0))],
+                    [Assign (FuncIdent "n2", BaseTy W, Instr2 ("sub", FuncIdent "n1", Number 1));
+                     Assign (FuncIdent "c", BaseTy W, Instr2 ("cslew", FuncIdent "n1", Number 0))],
                     Instr3 ("jnz", FuncIdent "c", BlockLabel "end", BlockLabel "loop1"));
              Block ("@loop1", [],
-                    [Assign (FuncIdent "idx0", L, Instr1 ("extsw", FuncIdent "n2"));
-                     Assign (FuncIdent "idx1", L, Instr2 ("mul", Number 4, FuncIdent "idx0"));
-                     Assign (FuncIdent "idx2", L,
+                    [Assign (FuncIdent "idx0", BaseTy L, Instr1 ("extsw", FuncIdent "n2"));
+                     Assign (FuncIdent "idx1", BaseTy L, Instr2 ("mul", Number 4, FuncIdent "idx0"));
+                     Assign (FuncIdent "idx2", BaseTy L,
                              Instr2 ("add", FuncIdent "idx1", FuncIdent "arr"));
-                     Assign (FuncIdent "w", W, Instr1 ("loadw", FuncIdent "idx2"));
-                     Assign (FuncIdent "s1", W, Instr2 ("add", FuncIdent "w", FuncIdent "s0"))],
+                     Assign (FuncIdent "w", BaseTy W, Instr1 ("loadw", FuncIdent "idx2"));
+                     Assign (FuncIdent "s1", BaseTy W, Instr2 ("add", FuncIdent "w", FuncIdent "s0"))],
                     Instr1 ("jmp", BlockLabel "loop"))]) in
   assert_equal (parse_function sum_stream true) sum_expected
 
