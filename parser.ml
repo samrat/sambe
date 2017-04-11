@@ -69,7 +69,7 @@ and qbe =
       qbe list                  (* block list *)
 
   | Block of
-      string *                  (* block name *)
+      qbe *                     (* block label *)
       instr list *              (* phi instrs *)
       instr list *              (* regular instrs *)
       instr                     (* jump/return *)
@@ -259,7 +259,7 @@ let parse_block ls =
         | Some(1) -> parse_instruction ls
         | _ -> failwith "there should be at most one instruction between regular instructions and the next block"
       in
-      Block(label, phis, instrs, last_instr)
+      Block((ident_of_string label), phis, instrs, last_instr)
     end
   | _ -> failwith "expected block label"
 
@@ -311,7 +311,7 @@ let parse_function ls export =
                  | _ -> failwith "expected block" in
                let new_block =
                  Block(label, phis, instrs,
-                       Instr1("jmp", BlockLabel(next_block_label))) in
+                       Instr1("jmp", next_block_label)) in
                (new_block, new_block :: acc)
              | _ -> (block, block::acc))
           final_blocks
