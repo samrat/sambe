@@ -8,7 +8,8 @@ let suite =
 ["func_test1">:: sum_test;
  "block_test1">:: block_test;
  "instr_test1">:: instruction_test;
-
+ "typedef_test1">:: typedef_test;
+ 
  "lexer">:: test_lexer;
   ]
 

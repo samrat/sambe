@@ -3,6 +3,13 @@ open Parser
 
 let stream_of_string = Lexer.stream_of_string;;
 
+let typedef_test _ =
+  let stream =
+    stream_of_string "type :cryptovector = align 16 { w 4 }" in
+  let expected =
+    TypeDef (AggType "cryptovector", [(BaseTy W, 4)], Some 16) in
+  assert_equal (parse_typedef stream) expected
+
 let instruction_test _ =
   let instr_stream = 
     stream_of_string "%n1 =w phi @start %num, @loop1 %n2" in

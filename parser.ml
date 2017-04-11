@@ -4,6 +4,9 @@ open ExtLib
 
 (* TODO:
 - Phi currently assumes it will be passed two args.
+- Parse type and data defs
+- Better errors(line numbers, exceptions- not just failwith)
+- error recovery
 *)
 
 type basety = S | D | W | L
@@ -45,9 +48,9 @@ and qbe =
 
   (* typedef *)
   | TypeDef of
-      string *                    (* name *)
-      (ty * int) list *           (* fields *)
-      int option                  (* alignment *)
+      qbe *                     (* name *)
+      (ty * int) list *         (* fields *)
+      int option                (* alignment *)
 
   (* datadef *)
   | DataDef of
@@ -292,7 +295,6 @@ let parse_function ls export =
     if peek_token ls = RBrace
     then
       begin
-        ignore (next_token ls); (* RBrace *)
         let last_block = List.hd acc in
         let final_blocks = List.rev (List.tl acc) in
         (* TODO: check that last block isn't missing jump instr *)
@@ -323,14 +325,55 @@ let parse_function ls export =
       let params = get_params ls in
       let _ = expect ls LBrace in
       let (_, blocks) = parse_blocks [] in
+      expect ls RBrace;
       FunDef(export, BaseTy(rettype), name, params, blocks)
     end
   | _ -> failwith "expected 'function'"
 
+
+let parse_typedef ls =
+  let rec parse_items acc =
+    match peek_token ls with
+    | RBrace -> List.rev acc
+    | Ident(ty) ->
+      begin
+      let item = (get_type (Ident(ty))) in
+      ignore (next_token ls);
+      let num = (match peek_token ls with
+          | Integer(n) -> ignore (next_token ls); n
+          | _ -> 1) in
+      let newitems = ((BaseTy(item), num) :: acc) in
+      if peek_token ls = Comma
+      then begin
+        ignore (next_token ls); 
+        parse_items newitems
+      end
+      else List.rev newitems
+      end
+    | _ -> failwith "syntax error in typedef"
+  in
+  match peek_token ls with
+  | Keyword("type") ->
+    ignore (next_token ls);
+    let type_name = get_arg (next_token ls) in
+    (expect ls Equals);
+    let alignment = (match peek_token ls with
+        | Keyword("align") ->
+          ignore (next_token ls);
+          (match (next_token ls) with
+           | Integer(i) -> Some(i)
+           | _ -> failwith "expected integer")
+        | _ -> None) in
+    (expect ls LBrace);
+    let items = parse_items [] in
+    (expect ls RBrace);
+    TypeDef(type_name, items, alignment)
+  | _ -> failwith "expected 'type'"
+
 (*
 
 type :fourfloats = { s, s, d, d }
-=> TypeDef("fourfloats", [(BaseTy(S), 1); (BaseTy(S), 1);
+=> TypeDef(AggType("fourfloats"), [(BaseTy(S), 1); (BaseTy(S), 1);
                           (S, 1); (D, 1)], None)
 
 type :abyteandmanywords = { b, w 100 }

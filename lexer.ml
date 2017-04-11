@@ -74,7 +74,7 @@ let read_keyword ls =
   match read_ident ls with
   | Ident(id) -> begin
       match id with
-      | "type" | "function" | "data" -> Keyword(id)
+      | "type" | "function" | "data" | "align" -> Keyword(id)
       | _ when is_instruction_op id -> Keyword(id)
       | f -> (match explode f with
           | 's'::'_'::flt -> Float(float_of_string (implode flt))
