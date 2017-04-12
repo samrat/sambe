@@ -4,7 +4,6 @@ open ExtLib
 
 (* TODO:
 - Phi currently assumes it will be passed two args.
-- Parse type and data defs
 - Better errors(line numbers, exceptions- not just failwith)
 - error recovery
 *)
