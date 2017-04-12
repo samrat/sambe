@@ -36,7 +36,7 @@ type instr = Assign of qbe * ty * instr (* dest * type * instr *)
            | Phi of (qbe * qbe) list  (* phi  *)
 and qbe =
   (* const *)
-  | Number of int
+  | Integer of int
   (* TODO: handle different sizes *)
   | Float of float
   | Double of float
@@ -99,7 +99,7 @@ let ident_of_token t =
 let get_arg (ident : token) : qbe =
   match ident with
   | Ident(arg) -> ident_of_string arg
-  | Integer(n) -> Number(n)
+  | Integer(n) -> Integer(n)
   | Float(f) -> Float(f)
   | Double(d) -> Double(d)
   | _ -> failwith (Printf.sprintf "should have been an ident: %s" (dump ident))
@@ -383,7 +383,7 @@ let parse_datadef ls export =
       | Comma | RBrace -> List.rev ds;
       | Integer(n) ->
         ignore (next_token ls);
-        parse_dataitems (Number(n)::ds)
+        parse_dataitems (Integer(n)::ds)
       | Float(n) ->
         ignore (next_token ls);
         parse_dataitems (Float(n)::ds)
@@ -439,8 +439,8 @@ type :opaque = align 16 { 32 }
 
 
 data $a = { w 1 2 3, b 0 }
-=> DataDef(false, "a", [(W, [Number(1); Number(2); Number(3)]);
-                        (B, [Number(0)])])
+=> DataDef(false, "a", [(W, [Integer(1); Integer(2); Integer(3)]);
+                        (B, [Integer(0)])])
 
 data $b = { z 1000 }
 => DataDef(false, "b", [(Z, [1000])])

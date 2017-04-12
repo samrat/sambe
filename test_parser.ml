@@ -15,14 +15,14 @@ let datadef_test _ =
     stream_of_string "data $a = { w 1 2 3, b 0 }" in
   let expected =
     DataDef (false, GlobalIdent "a",
-             [(BaseTy W, [Number 1; Number 2; Number 3]); (ExtTy B, [Number 0])]) in
+             [(BaseTy W, [Integer 1; Integer 2; Integer 3]); (ExtTy B, [Integer 0])]) in
   assert_equal (parse_datadef stream false) expected
 
 let datadef_test2 _ =
   let stream =
     stream_of_string "data $b = { z 1000 }" in
   let expected =
-    DataDef (true, GlobalIdent "b", [(BaseTy Z, [Number 1000])]) in
+    DataDef (true, GlobalIdent "b", [(BaseTy Z, [Integer 1000])]) in
   assert_equal (parse_datadef stream true) expected
 
 let instruction_test _ =
@@ -47,9 +47,9 @@ jnz %c, @end, @loop1" in
     [(BlockLabel "start", FuncIdent "num");
      (BlockLabel "loop1", FuncIdent "n2")]);
   Assign (FuncIdent "s0", BaseTy W,
-   Phi [(BlockLabel "start", Number 0); (BlockLabel "loop1", FuncIdent "s1")])],
- [Assign (FuncIdent "n2", BaseTy W, Instr2 ("sub", FuncIdent "n1", Number 1));
-  Assign (FuncIdent "c", BaseTy W, Instr2 ("cslew", FuncIdent "n1", Number 0))],
+   Phi [(BlockLabel "start", Integer 0); (BlockLabel "loop1", FuncIdent "s1")])],
+ [Assign (FuncIdent "n2", BaseTy W, Instr2 ("sub", FuncIdent "n1", Integer 1));
+  Assign (FuncIdent "c", BaseTy W, Instr2 ("cslew", FuncIdent "n1", Integer 0))],
                               Instr3 ("jnz", FuncIdent "c", BlockLabel "end", BlockLabel "loop1"))
   in
   assert_equal (parse_block block_stream) block_expected
@@ -85,13 +85,13 @@ ret %s0
                                 (BlockLabel "loop1", FuncIdent "n2")]);
                      Assign (FuncIdent "s0", BaseTy W,
                              Phi
-                               [(BlockLabel "start", Number 0); (BlockLabel "loop1", FuncIdent "s1")])],
-                    [Assign (FuncIdent "n2", BaseTy W, Instr2 ("sub", FuncIdent "n1", Number 1));
-                     Assign (FuncIdent "c", BaseTy W, Instr2 ("cslew", FuncIdent "n1", Number 0))],
+                               [(BlockLabel "start", Integer 0); (BlockLabel "loop1", FuncIdent "s1")])],
+                    [Assign (FuncIdent "n2", BaseTy W, Instr2 ("sub", FuncIdent "n1", Integer 1));
+                     Assign (FuncIdent "c", BaseTy W, Instr2 ("cslew", FuncIdent "n1", Integer 0))],
                     Instr3 ("jnz", FuncIdent "c", BlockLabel "end", BlockLabel "loop1"));
              Block (BlockLabel "loop1", [],
                     [Assign (FuncIdent "idx0", BaseTy L, Instr1 ("extsw", FuncIdent "n2"));
-                     Assign (FuncIdent "idx1", BaseTy L, Instr2 ("mul", Number 4, FuncIdent "idx0"));
+                     Assign (FuncIdent "idx1", BaseTy L, Instr2 ("mul", Integer 4, FuncIdent "idx0"));
                      Assign (FuncIdent "idx2", BaseTy L,
                              Instr2 ("add", FuncIdent "idx1", FuncIdent "arr"));
                      Assign (FuncIdent "w", BaseTy W, Instr1 ("loadw", FuncIdent "idx2"));

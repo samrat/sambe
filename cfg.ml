@@ -108,32 +108,11 @@ let dom_solver preds (all_nodes : qbe list) start =
   step ();
   doms
 
-
-
-let g = build_cfg [Block (BlockLabel "start", [], [], Instr1 ("jmp", BlockLabel "loop"));
-  Block (BlockLabel "loop",
-   [Assign (FuncIdent "n1", BaseTy W,
-     Phi
-      [(BlockLabel "start", FuncIdent "num");
-       (BlockLabel "loop1", FuncIdent "n2")]);
-    Assign (FuncIdent "s0", BaseTy W,
-     Phi
-      [(BlockLabel "start", Number 0); (BlockLabel "loop1", FuncIdent "s1")])],
-   [Assign (FuncIdent "n2", BaseTy W,
-     Instr2 ("sub", FuncIdent "n1", Number 1));
-    Assign (FuncIdent "c", BaseTy W,
-     Instr2 ("cslew", FuncIdent "n1", Number 0))],
-   Instr3 ("jnz", FuncIdent "c", BlockLabel "end", BlockLabel "loop1"));
-  Block (BlockLabel "loop1", [],
-   [Assign (FuncIdent "idx0", BaseTy L, Instr1 ("extsw", FuncIdent "n2"));
-    Assign (FuncIdent "idx1", BaseTy L,
-     Instr2 ("mul", Number 4, FuncIdent "idx0"));
-    Assign (FuncIdent "idx2", BaseTy L,
-     Instr2 ("add", FuncIdent "idx1", FuncIdent "arr"));
-    Assign (FuncIdent "w", BaseTy W, Instr1 ("loadw", FuncIdent "idx2"));
-    Assign (FuncIdent "s1", BaseTy W,
-     Instr2 ("add", FuncIdent "w", FuncIdent "s0"))],
-         Instr1 ("jmp", BlockLabel "loop"))];;
+let parsed_func = parse_function func true;;
+let blocks = match parsed_func with
+  | FunDef(_, _, _, _, blocks) -> blocks
+  | _ -> failwith "expected function definition";;
+let g = build_cfg blocks;;
 let pg = pred_graph g (BlockLabel "start");;
 let all_nodes = [BlockLabel("start"); BlockLabel("loop"); BlockLabel("loop1"); BlockLabel("end")];;
-let doms = dom_solver pg all_nodes (BlockLabel("start"));;
+let doms = dom_solver pg all_nodes (BlockLabel("start"))
