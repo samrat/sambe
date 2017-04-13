@@ -96,7 +96,8 @@ ret %s0
                              Instr2 ("add", FuncIdent "idx1", FuncIdent "arr"));
                      Assign (FuncIdent "w", BaseTy W, Instr1 ("loadw", FuncIdent "idx2"));
                      Assign (FuncIdent "s1", BaseTy W, Instr2 ("add", FuncIdent "w", FuncIdent "s0"))],
-                    Instr1 ("jmp", BlockLabel "loop"))]) in
+                    Instr1 ("jmp", BlockLabel "loop"));
+            Block (BlockLabel "end", [], [], Instr1 ("ret", FuncIdent "s0"))]) in
   assert_equal (parse_function sum_stream true) sum_expected
 
 
