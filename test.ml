@@ -1,6 +1,7 @@
 open OUnit2
 open Test_lexer
 open Test_parser
+open Test_cfg
 
 
 let suite =
@@ -11,6 +12,7 @@ let suite =
  "typedef_test">:: typedef_test;
  "datadef_test">:: datadef_test;
  "datadef_test2">:: datadef_test2;
+ "test_unreachable_code_elim">:: test_unreachable_elim;
  
  "lexer">:: test_lexer;
   ]

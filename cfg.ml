@@ -9,35 +9,6 @@ module Qbe_set = Set.Make (struct
 let dedup xs =
   Qbe_set.elements (Qbe_set.of_list xs)
 
-
-let func = Lexer.stream_of_string "function w $sum(l %arr, w %num) {
-@start
-@loop
-	%n1 =w phi @start %num, @loop1 %n2
-	%s0 =w phi @start 0, @loop1 %s1
-	%n2 =w sub %n1, 1
-	%c =w cslew %n1, 0
-	jnz %c, @end, @loop1
-@loop1
-	%idx0 =l extsw %n2
-	%idx1 =l mul 4, %idx0
-	%idx2 =l add %idx1, %arr
-	%w =w loadw %idx2
-	%s1 =w add %w, %s0
-	jmp @loop
-@unreachable
-	%idx0 =l extsw %n2
-	%idx1 =l mul 4, %idx0
-	%idx2 =l add %idx1, %arr
-	%w =w loadw %idx2
-	%s1 =w add %w, %s0
-	jmp @loop
-@end
-	ret %s0
-}
-";;
-(* parse_function func true;; *)
-
 let build_cfg blocks =
   let graph : (qbe, qbe list) Hashtbl.t = Hashtbl.create 12 in
   let all_block_labels = List.map (fun block ->
@@ -153,6 +124,7 @@ let dom_solver preds (all_nodes : qbe list) start =
   step ();
   doms
 
+(*
 let parsed_func = parse_function func true;;
 let blocks = match parsed_func with
   | FunDef(_, _, _, _, blocks) -> blocks
@@ -160,3 +132,4 @@ let blocks = match parsed_func with
 let (entry, all_nodes, g) = build_cfg blocks;;
 let pg = pred_graph g entry;;
 let doms = dom_solver pg all_nodes (BlockLabel("start"))
+*)
