@@ -465,38 +465,6 @@ let parse_toplevel ls =
   | Keyword("type") -> parse_typedef ls
   | _ -> failwith "not a valid top level def"
 
-(*
-
-type :fourfloats = { s, s, d, d }
-=> TypeDef(AggType("fourfloats"), [(BaseTy(S), 1); (BaseTy(S), 1);
-                          (S, 1); (D, 1)], None)
-
-type :abyteandmanywords = { b, w 100 }
-=> TypeDef("abyteandmanywords", [(B, 1); (W, 100)], None)
-
-type :cryptovector = align 16 { w 4 }
-=> TypeDef("cryptovector", [(W, 4)], Some 16)
-
-type :opaque = align 16 { 32 }
-=> TypeDef("opaque", [(B, 32)], Some 16)
-
-
-
-data $a = { w 1 2 3, b 0 }
-=> DataDef(false, "a", [(W, [Integer(1); Integer(2); Integer(3)]);
-                        (B, [Integer(0)])])
-
-data $b = { z 1000 }
-=> DataDef(false, "b", [(Z, [1000])])
-
-data $c = { l -1, l $c }
-=>
-
-
-FunDef(false, BaseTy(W), "foobar", [], [Block("foo", [Phi], [], Ret)]);;
-
-*)
-
 (* let () = *)
 (*   let ls = open_stream "mandel.ssa" in *)
 (*   ignore (Printf.printf "%s" (dump (parse_function ls true))) *)
