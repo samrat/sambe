@@ -1,4 +1,5 @@
 open Parser
+open Util
 open ExtLib
 
 module Qbe_set = Set.Make (struct
@@ -123,6 +124,57 @@ let dom_solver preds (all_nodes : qbe list) start =
   Hashtbl.replace doms start [start];
   step ();
   doms
+
+(* Remove phi instructions from all blocks. It does so by placing an
+   assign in the block from where the variable would be inherited.
+*)
+let de_ssa fn =
+  let (export, retty, name, params, blocks) = match fn with
+    | FunDef(export, retty, name, params, blocks) -> 
+      (export, retty, name, params, blocks)
+    | _ -> failwith "expected function definition"
+  in
+  let all_phis = List.fold_left (fun all_phis block ->
+      match block with
+      | Block(_, phis, reg_instrs, jmp) -> phis @ all_phis
+      | _ -> failwith "expected block")
+    []
+    blocks
+  in
+  let movs_to_add_in_block = (List.fold_left (fun acc instr ->
+      match instr with
+      | Assign(dest, ty, Phi(vars)) ->
+        (dest, ty, vars) :: acc
+      | _ -> failwith "expected phi instrs")
+      []
+      all_phis)
+  in
+  let block_to_movs = Hashtbl.create 32 in
+  let block_movs = List.fold_left (fun acc (dest, ty, vs) ->
+      List.map (fun (block_label, vars) -> 
+          let block_movs = Hashtbl.find_default acc block_label [] in
+          Hashtbl.replace acc block_label ((dest, ty, vars) :: block_movs))
+      vs;
+      acc)
+      block_to_movs
+      movs_to_add_in_block
+  in
+  let triple_to_assign (dest, ty, var) =
+    Assign(dest, ty, Instr1("copy", var)) in
+  let new_blocks = List.fold_left (fun new_blocks block ->
+      match block with
+      | Block(label, phis, instrs, jmp) ->
+        let block_movs = Hashtbl.find_default block_movs label [] in
+        let new_instrs = List.map triple_to_assign block_movs in
+        let new_block = Block(label, [], instrs @ new_instrs, jmp) in
+        new_block :: new_blocks
+      | _ -> failwith "expected block"
+    )
+      []
+      blocks
+                   |> List.rev
+  in FunDef(export, retty, name, params, new_blocks)
+
 
 (*
 let parsed_func = parse_function func true;;

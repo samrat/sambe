@@ -10,3 +10,5 @@ let implode l =
   | [] -> result
   | c :: l -> Bytes.set result i c; imp (i + 1) l in
   imp 0 l;;
+
+let (|>) x f = f x
