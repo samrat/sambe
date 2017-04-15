@@ -13,6 +13,7 @@ let suite =
  "datadef_test">:: datadef_test;
  "datadef_test2">:: datadef_test2;
  "test_unreachable_code_elim">:: test_unreachable_elim;
+ "test_de_ssa">:: test_de_ssa;
  
  "lexer">:: test_lexer;
   ]

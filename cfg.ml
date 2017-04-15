@@ -151,10 +151,10 @@ let de_ssa fn =
   in
   let block_to_movs = Hashtbl.create 32 in
   let block_movs = List.fold_left (fun acc (dest, ty, vs) ->
-      List.map (fun (block_label, vars) -> 
+      ignore (List.map (fun (block_label, vars) -> 
           let block_movs = Hashtbl.find_default acc block_label [] in
           Hashtbl.replace acc block_label ((dest, ty, vars) :: block_movs))
-      vs;
+      vs);
       acc)
       block_to_movs
       movs_to_add_in_block

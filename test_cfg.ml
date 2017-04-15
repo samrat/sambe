@@ -61,3 +61,31 @@ let test_unreachable_elim _ =
   in
   assert_equal (eliminate_unreachable_blocks parsed_func)
     expected
+
+
+let test_de_ssa _ =
+  let func = Lexer.stream_of_string "function w $foo() {
+@ifstmt
+        jnz %x, @ift, @iff
+@ift
+        jmp @retstmt
+@iff
+        jmp @retstmt
+@retstmt
+        %y =w phi @ift 1, @iff 2
+        ret %y
+}" in
+  let parsed_func = parse_function func true in
+  let dessad = de_ssa parsed_func in
+  let expected = FunDef(true, BaseTy W, GlobalIdent "foo", [],
+   [Block (BlockLabel "ifstmt", [], [],
+     Instr3 ("jnz", FuncIdent "x", BlockLabel "ift", BlockLabel "iff"));
+    Block (BlockLabel "ift", [],
+     [Assign (FuncIdent "y", BaseTy W, Instr1 ("copy", Integer 1))],
+     Instr1 ("jmp", BlockLabel "retstmt"));
+    Block (BlockLabel "iff", [],
+     [Assign (FuncIdent "y", BaseTy W, Instr1 ("copy", Integer 2))],
+     Instr1 ("jmp", BlockLabel "retstmt"));
+    Block (BlockLabel "retstmt", [], [], Instr1 ("ret", FuncIdent "y"))])
+  in
+  assert_equal expected dessad
