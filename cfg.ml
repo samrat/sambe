@@ -34,17 +34,24 @@ let build_cfg blocks =
   in
   (entry, all_block_labels, build_cfg' blocks)
 
-
-let find_reachable_nodes (cfg : (qbe, qbe list) Hashtbl.t) (start : qbe) =
+(* Reverse-postorder traversal of blocks *)
+let order_blocks cfg start =
+  let order = ref [] in
   let rec traverse reachable current =
     if (List.mem current reachable)
     then reachable
-    else match Hashtbl.find_option cfg current with
-        | Some(succs) -> List.flatten (List.map (traverse (current::reachable))
-                                         succs)
-        | None -> (current::reachable)
+    else
+      let ret = match Hashtbl.find_option cfg current with
+      | Some(succs) -> 
+        List.flatten (List.map (traverse (current::reachable))
+                                  succs)
+      | None -> (current::reachable)
+      in
+      order := (current :: !order);
+      ret
   in
-  dedup (traverse [] start)
+  ignore (traverse [] start);
+  !order
 
 let eliminate_unreachable_blocks fn =
   let (export, retty, name, params, blocks) = match fn with
@@ -52,7 +59,7 @@ let eliminate_unreachable_blocks fn =
       (export, retty, name, params, blocks)
     | _ -> failwith "expected function definition" in
   let (entry, all_nodes, g) = build_cfg blocks in
-  let reachable_nodes = find_reachable_nodes g entry in
+  let reachable_nodes = order_blocks g entry in
   let new_blocks = List.filter (fun block ->
       match block with
       | Block(label, _, _, _) when List.mem label reachable_nodes ->
@@ -61,6 +68,7 @@ let eliminate_unreachable_blocks fn =
   FunDef(export, retty, name, params, new_blocks)
 
 (* Hashtbl.find_option g (BlockLabel "loop1");; *)
+
 
 let pred_graph cfg start =
   let graph = Hashtbl.create 12 in
@@ -88,6 +96,7 @@ let pred_graph cfg start =
   in
   build_graph start;
   graph
+
 
 (* Simple fixed-point iterative solver for dominators *)
 let dom_solver preds (all_nodes : qbe list) start =
@@ -125,6 +134,9 @@ let dom_solver preds (all_nodes : qbe list) start =
   step ();
   doms
 
+(* NOTE: this is the naive SSA back translation. *)
+(* TODO: Use Brigg's algorithm instead, in order to avoid "lost copy"
+   problem *)
 (* Remove phi instructions from all blocks. It does so by placing an
    assign in the block from where the variable would be inherited.
 *)
