@@ -7,9 +7,6 @@ module Qbe_set = Set.Make (struct
     let compare = compare
   end);;
 
-let dedup xs =
-  Qbe_set.elements (Qbe_set.of_list xs)
-
 let build_cfg blocks =
   let graph : (qbe, qbe list) Hashtbl.t = Hashtbl.create 12 in
   let all_block_labels = List.map (fun block ->
@@ -66,9 +63,6 @@ let eliminate_unreachable_blocks fn =
         true
       | _ -> false) blocks in
   FunDef(export, retty, name, params, new_blocks)
-
-(* Hashtbl.find_option g (BlockLabel "loop1");; *)
-
 
 let pred_graph cfg start =
   let graph = Hashtbl.create 12 in
@@ -173,18 +167,18 @@ let de_ssa fn =
   in
   let triple_to_assign (dest, ty, var) =
     Assign(dest, ty, Instr1("copy", var)) in
-  let new_blocks = List.fold_left (fun new_blocks block ->
-      match block with
-      | Block(label, phis, instrs, jmp) ->
-        let block_movs = Hashtbl.find_default block_movs label [] in
-        let new_instrs = List.map triple_to_assign block_movs in
-        let new_block = Block(label, [], instrs @ new_instrs, jmp) in
-        new_block :: new_blocks
-      | _ -> failwith "expected block"
-    )
+  let new_blocks =
+    List.fold_left (fun new_blocks block ->
+        match block with
+        | Block(label, phis, instrs, jmp) ->
+          let block_movs = Hashtbl.find_default block_movs label [] in
+          let new_instrs = List.map triple_to_assign block_movs in
+          let new_block = Block(label, [], instrs @ new_instrs, jmp) in
+          new_block :: new_blocks
+        | _ -> failwith "expected block" )
       []
       blocks
-                   |> List.rev
+    |> List.rev
   in FunDef(export, retty, name, params, new_blocks)
 
 
