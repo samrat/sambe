@@ -10,6 +10,8 @@ test_suite:
 
 build:
 	$(OC) -tag thread -pkg threads,utop,extlib myutop.top
+	mv _build/myutop.top .
+	chmod +x myutop.top
 
 clean:
 	$(OC) -clean
