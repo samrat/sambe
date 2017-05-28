@@ -1,6 +1,6 @@
 Instr
 Util
-Lexer
-Parser
+Qbe_lexer
+Qbe_parser
 Cfg
 Myutop_main
