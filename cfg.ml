@@ -1,6 +1,8 @@
-open Parser
+open Qbe_parser
 open Util
 open ExtLib
+
+open X86
 
 module Qbe_set = Set.Make (struct
     type t = qbe
@@ -181,6 +183,58 @@ let de_ssa fn =
     |> List.rev
   in FunDef(export, retty, name, params, new_blocks)
 
+
+let get_arg_val = function
+  | FuncIdent(id) -> Var(id)
+  | Integer(i) -> Const(i)
+  | _ -> failwith "NYI"
+
+let get_label = function
+  | BlockLabel(label) -> label
+  | _ -> failwith "expected BlockLabel"
+
+let rec instr_to_x86 instr =
+  match instr with
+  | Assign(dest, ty, src_instr) ->
+    instr_to_x86 src_instr @
+    [ IMov(get_arg_val dest, Reg(RAX))]
+  | Instr1(op, arg) ->
+    begin
+      match op with
+      | "copy" -> 
+        [ IMov(Reg(RAX), get_arg_val arg) ]
+      | "jmp" ->
+        [ IJmp(get_label arg) ]
+      | _ -> failwith "NYI"
+    end
+  | Instr2(op, arg1, arg2) ->
+    begin
+      match op with
+      | "add" -> 
+        [ IMov(Reg(RAX), get_arg_val arg1);
+          IAdd(Reg(RAX), get_arg_val arg2); ]
+      | _ -> failwith "NYI"
+    end
+  | Instr3(op, arg1, arg2, arg3) ->
+    begin
+      match op with
+      | "jnz" ->
+        [ IMov(Reg(RAX), get_arg_val arg1);
+          ICmp(Const(0), Reg(RAX));
+          IJne(get_label arg3);
+          (* ILabel(get_label arg2); *)
+        ]
+      | _ -> failwith "NYI"
+    end
+    
+  | _ -> failwith "NYI"
+
+let block_to_x86 block =
+  match block with
+  | Block(label, [], reg_instrs, last_instr) ->
+    failwith "NYI"
+  | Block(_, phis, _, _) -> failwith "expected empty phi instr list"
+  | _ -> failwith "NYI"
 
 (*
 let parsed_func = parse_function func true;;

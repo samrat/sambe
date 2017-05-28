@@ -2,5 +2,6 @@ Instr
 Util
 Qbe_lexer
 Qbe_parser
+X86
 Cfg
 Myutop_main
