@@ -8,8 +8,9 @@ test_suite:
 	ocamlbuild -tag 'debug' -r -use-ocamlfind -package oUnit,extlib test.native
 	./test.native
 
-build:
+build: myutop.mltop
 	$(OC) -tag thread -pkg threads,utop,extlib myutop.top
+	rm -f myutop.top
 	mv _build/myutop.top .
 	chmod +x myutop.top
 
