@@ -74,10 +74,10 @@ let rec instr_to_x86 instr =
       | "jnz" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           ICmp(Reg(RAX), Const(0));
-          IJne(get_label arg3);
+          IJne(get_label arg2);
           (* TODO: Can we avoid this jump by generating code for the
-             `arg2` block here? *)
-          IJmp(get_label arg2);
+             `arg3` block here? *)
+          IJmp(get_label arg3);
         ]
       | _ -> failwith "NYI"
     end
