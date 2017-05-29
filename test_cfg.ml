@@ -1,9 +1,11 @@
 open OUnit2
 open Cfg
-open Parser
+open Qbe_parser
+
+let stream_of_string = Qbe_lexer.stream_of_string
 
 let test_unreachable_elim _ =
-  let func = Lexer.stream_of_string "function w $sum(l %arr, w %num) {
+  let func = stream_of_string "function w $sum(l %arr, w %num) {
 @start
 @loop
         %n1 =w phi @start %num, @loop1 %n2
@@ -64,8 +66,9 @@ let test_unreachable_elim _ =
 
 
 let test_de_ssa _ =
-  let func = Lexer.stream_of_string "function w $foo() {
+  let func = stream_of_string "function w $foo() {
 @ifstmt
+        %x =l copy 0
         jnz %x, @ift, @iff
 @ift
         jmp @retstmt
@@ -78,7 +81,8 @@ let test_de_ssa _ =
   let parsed_func = parse_function func true in
   let dessad = de_ssa parsed_func in
   let expected = FunDef(true, BaseTy W, GlobalIdent "foo", [],
-   [Block (BlockLabel "ifstmt", [], [],
+   [Block (BlockLabel "ifstmt", [],
+     [Assign (FuncIdent "x", BaseTy L, Instr1 ("copy", Integer 0))],
      Instr3 ("jnz", FuncIdent "x", BlockLabel "ift", BlockLabel "iff"));
     Block (BlockLabel "ift", [],
      [Assign (FuncIdent "y", BaseTy W, Instr1 ("copy", Integer 1))],

@@ -1,5 +1,5 @@
 open OUnit2
-open Lexer
+open Qbe_lexer
 
 let test_lexer _ =
   let str = "function data %n1 =w phi @start %num, @loop1 %n2" in

@@ -1,4 +1,4 @@
-open Lexer
+open Qbe_lexer
 open Util
 open ExtLib
 

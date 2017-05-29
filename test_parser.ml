@@ -1,7 +1,7 @@
 open OUnit2
-open Parser
+open Qbe_parser
 
-let stream_of_string = Lexer.stream_of_string;;
+let stream_of_string = Qbe_lexer.stream_of_string;;
 
 let typedef_test _ =
   let stream =

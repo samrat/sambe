@@ -9,8 +9,10 @@ test_suite:
 	./test.native
 
 build: myutop.mltop
-	$(OC) -tag thread -pkg threads,utop,extlib myutop.top
 	rm -f myutop.top
+	ocamlbuild -clean
+	$(OC) -tag thread -pkg threads,utop,extlib myutop.top
+
 	mv _build/myutop.top .
 	chmod +x myutop.top
 
