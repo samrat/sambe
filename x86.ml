@@ -6,6 +6,12 @@ type reg =
   | RAX
   | RSP
   | RBP
+  | RDI
+  | RSI
+  | RDX
+  | RCX
+  | R8
+  | R9
 
 type size =
   | QWORD_PTR
@@ -25,6 +31,7 @@ type arg =
 type instruction =
   | IMov of arg * arg
   | IAdd of arg * arg
+  | IMul of arg * arg
   | ICmp of arg * arg
             
   | IJne of string
@@ -33,6 +40,9 @@ type instruction =
 
   | ILabel of string
 
+let get_ident_name = function
+  | GlobalIdent(id) | FuncIdent(id) -> id
+  | _ -> failwith "NYI"
 
 let get_arg_val = function
   | FuncIdent(id) -> Var(id)
@@ -66,7 +76,13 @@ let rec instr_to_x86 instr =
       | "add" -> 
         [ IMov(Reg(RAX), get_arg_val arg1);
           IAdd(Reg(RAX), get_arg_val arg2); ]
-      | _ -> failwith "NYI"
+      | "mul" ->
+        [ IMov(Reg(RAX), get_arg_val arg1);
+          IMul(Reg(RAX), get_arg_val arg2); ]
+      | "sub"
+      | "cslew" ->
+        [ ]                     (* TODO *)
+      | _ -> failwith (Printf.sprintf "NYI: instr_to_x86 %s" op)
     end
   | Instr3(op, arg1, arg2, arg3) ->
     begin
@@ -96,9 +112,8 @@ let block_to_x86 block =
 
 (* TODO: Currently, this puts everything in memory. Implement the
    register allocation pass to fix that. *)
-let assign_homes (func: instruction list) =
-  let mappings : (string, arg) Hashtbl.t = Hashtbl.create 16 in
-  let counter = ref 0 in
+let assign_homes (block: instruction list) (mappings : (string, arg) Hashtbl.t)=
+  let counter = ref 1 in
   let find_loc v =
     match Hashtbl.find_option mappings v with
     | Some(loc) -> loc
@@ -134,7 +149,7 @@ let assign_homes (func: instruction list) =
       ICmp(new_dest, new_src)
     | instr -> instr
   in
-  List.map fixup_instr func
+  (!counter - 1, List.map fixup_instr block)
 
 
 let r_to_asm (r : reg) : string =
@@ -142,6 +157,12 @@ let r_to_asm (r : reg) : string =
     | RAX -> "rax"
     | RSP -> "rsp"
     | RBP -> "rbp"
+    | RDI -> "rdi"
+    | RSI -> "rsi"
+    | RDX -> "rdx"
+    | RCX -> "rcx"
+    | R8  -> "r8"
+    | R9  -> "r9"
 
 let s_to_asm (s : size) : string =
   match s with
@@ -170,6 +191,8 @@ let i_to_asm (i : instruction) : string =
       sprintf "  mov %s, %s" (arg_to_asm dest) (arg_to_asm value)
     | IAdd(dest, to_add) ->
       sprintf "  add %s, %s" (arg_to_asm dest) (arg_to_asm to_add)
+    | IMul(dest, to_mul) ->
+      sprintf "  mul %s, %s" (arg_to_asm dest) (arg_to_asm to_mul)
     | ICmp(left, right) ->
       sprintf "  cmp %s, %s" (arg_to_asm left) (arg_to_asm right)
     | ILabel(name) ->
@@ -179,11 +202,37 @@ let i_to_asm (i : instruction) : string =
     | IJmp(arg) ->
       sprintf "  jmp %s" arg
     | IRet ->
-      "  ret"
+      "  mov rsp, rbp
+  pop rbp
+  ret"
+
+let arg_reg_order = List.map (fun r -> Reg(r))
+    [RDI; RSI; RDX; RCX; R8; R9]
 
 let to_asm (is : instruction list) : string =
   List.fold_left (fun s i -> sprintf "%s\n%s" s (i_to_asm i)) "" is
 
+let asm_of_func (func : qbe) : string =
+  match func with
+  | FunDef(_, _, name, args, blocks) ->
+    let mappings : (string, arg) Hashtbl.t = Hashtbl.create 16 in
+    (* TODO: Handle more than 6 args *)
+    List.map2 (fun (ty, arg) reg ->
+        Hashtbl.add mappings (get_ident_name arg) reg)
+      (List.take 6 args)
+      (List.take (min 6 (List.length args)) arg_reg_order);
+    let (num_vars, compiled_blocks) = (assign_homes (List.flatten (List.map block_to_x86 blocks)) mappings) in
+    Printf.sprintf "%s:
+  push rbp
+  mov rbp, rsp
+  sub rsp, %d
+  jmp %s
+%s"
+      (get_ident_name name)
+      (8*num_vars)
+      "start"
+      (to_asm compiled_blocks)
+  | _ -> failwith "NYI"
 
 (*
 
