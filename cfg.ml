@@ -7,29 +7,35 @@ module Qbe_set = Set.Make (struct
     let compare = compare
   end);;
 
-let build_cfg blocks =
-  let graph : (qbe, qbe list) Hashtbl.t = Hashtbl.create 12 in
-  let all_block_labels = List.map (fun block ->
-      match block with
-      | Block(label, _, _, _) -> label
-      | _ -> failwith "function body has zero blocks")
-      blocks
-  in
-  let entry = List.hd all_block_labels in
-  let rec build_cfg' blocks =
-    match blocks with
-    | Block(label, _ , _, Instr1("jmp", dest)) :: rest ->
-      (Hashtbl.add graph label [dest]);
-      build_cfg' rest
-    | Block(label, _ , _, Instr3("jnz", _, dest1, dest2)) :: rest ->
-      (Hashtbl.add graph label [dest1; dest2]);
-      build_cfg' rest
-    | Block(label, _, _, Instr1("ret", _)) :: rest ->
-      build_cfg' rest
-    | [] -> graph
-    | _ -> failwith "NYI"
-  in
-  (entry, all_block_labels, build_cfg' blocks)
+let dedup xs =
+  Qbe_set.elements (Qbe_set.of_list xs)
+
+let build_cfg = function
+  | FunDef (_, _, _name, _args, blocks) ->
+
+    let graph : (qbe, qbe list) Hashtbl.t = Hashtbl.create 12 in
+    let all_block_labels = List.map (fun block ->
+        match block with
+        | Block(label, _, _, _) -> label
+        | _ -> failwith "function body has zero blocks")
+        blocks
+    in
+    let entry = List.hd all_block_labels in
+    let rec build_cfg' blocks =
+      match blocks with
+      | Block(label, _ , _, Instr1("jmp", dest)) :: rest ->
+        (Hashtbl.add graph label [dest]);
+        build_cfg' rest
+      | Block(label, _ , _, Instr3("jnz", _, dest1, dest2)) :: rest ->
+        (Hashtbl.add graph label [dest1; dest2]);
+        build_cfg' rest
+      | Block(label, _, _, Instr1("ret", _)) :: rest ->
+        build_cfg' rest
+      | [] -> graph
+      | _ -> failwith "NYI"
+    in
+    (entry, all_block_labels, build_cfg' blocks)
+  | _ -> failwith "expected function def"
 
 (* Reverse-postorder traversal of blocks *)
 let order_blocks cfg start =
@@ -55,7 +61,7 @@ let eliminate_unreachable_blocks fn =
     | FunDef(export, retty, name, params, blocks) -> 
       (export, retty, name, params, blocks)
     | _ -> failwith "expected function definition" in
-  let (entry, all_nodes, g) = build_cfg blocks in
+  let (entry, all_nodes, g) = build_cfg fn in
   let reachable_nodes = order_blocks g entry in
   let new_blocks = List.filter (fun block ->
       match block with
@@ -181,6 +187,30 @@ let de_ssa fn =
     |> List.rev
   in FunDef(export, retty, name, params, new_blocks)
 
+let rec uniquify_block_labels func_name blocks =
+  let uniq_of_label label = func_name ^ "_" ^ label in
+  let uniquify_blocks_in_instr instr = match instr with
+    | Instr1(op, BlockLabel(b)) -> 
+      Instr1(op, BlockLabel(uniq_of_label b))
+    | Instr3(op, arg1, BlockLabel(b1), BlockLabel(b2)) ->
+      Instr3(op, arg1, BlockLabel(uniq_of_label b1), BlockLabel(uniq_of_label b2))
+    | Phi(ls) -> Phi(List.map (fun bl -> match bl with
+        | (BlockLabel(b), FuncIdent(fi)) -> 
+          (BlockLabel(uniq_of_label b), FuncIdent(fi))
+        | _ -> failwith "expected blocklabel")
+        ls)
+    | instr -> instr
+  in
+  let uniquify_blocks_in_instr_list = List.map uniquify_blocks_in_instr 
+  in
+  List.map (fun block -> match block with
+      | Block(BlockLabel(label), phis, reg_instrs, last_instr) ->
+        Block(BlockLabel(uniq_of_label label),
+              uniquify_blocks_in_instr_list phis,
+              uniquify_blocks_in_instr_list reg_instrs, 
+              uniquify_blocks_in_instr last_instr)
+      | _ -> failwith "expected block")
+    blocks
 
 
 (*

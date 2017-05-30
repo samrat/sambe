@@ -217,11 +217,17 @@ let asm_of_func (func : qbe) : string =
   | FunDef(_, _, name, args, blocks) ->
     let mappings : (string, arg) Hashtbl.t = Hashtbl.create 16 in
     (* TODO: Handle more than 6 args *)
-    List.map2 (fun (ty, arg) reg ->
+    ignore (List.map2 (fun (ty, arg) reg ->
         Hashtbl.add mappings (get_ident_name arg) reg)
-      (List.take 6 args)
-      (List.take (min 6 (List.length args)) arg_reg_order);
-    let (num_vars, compiled_blocks) = (assign_homes (List.flatten (List.map block_to_x86 blocks)) mappings) in
+        (List.take 6 args)
+        (List.take (min 6 (List.length args)) arg_reg_order));
+    let (num_vars, compiled_blocks) =
+      blocks
+      |> Cfg.uniquify_block_labels (get_ident_name name)
+      |> List.map block_to_x86
+      |> List.flatten
+      |> (fun x -> assign_homes x mappings)
+    in
     Printf.sprintf "%s:
   push rbp
   mov rbp, rsp
@@ -230,7 +236,7 @@ let asm_of_func (func : qbe) : string =
 %s"
       (get_ident_name name)
       (8*num_vars)
-      "start"
+      (name ^ "_start")
       (to_asm compiled_blocks)
   | _ -> failwith "NYI"
 
