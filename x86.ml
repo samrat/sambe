@@ -32,8 +32,9 @@ type arg =
   (* pseudo-arg for before reg. allocation *)
   | Var of string
 
-type cc =                  (* TODO: fill in rest of condition codes *)
+type cc =
   | E | NE | LE | LT | GT | GE
+  | A | AE | B | BE
 
 type instruction =
   | IMov of arg * arg
@@ -150,10 +151,42 @@ let rec instr_to_x86 instr =
         [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
           ISet(GT, ByteReg(AL));
           IMovZx(Reg(RAX), ByteReg(AL))]
-      (* | "culew" *)
-      (* | "cultw" *)
-      (* | "cugew" *)
-      (* | "cugtw" *)
+
+      | "culew" ->
+        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(BE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "culel" ->
+        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(BE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+
+      | "cultw" ->
+        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(B, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "cultl" ->
+        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(B, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+
+      | "cugew" ->
+        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(AE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "cugel" ->
+        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(AE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+
+      | "cugtw" ->
+        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(A, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "cugtl" ->
+        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(A, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
     
       | _ -> failwith (Printf.sprintf "NYI: instr_to_x86 %s" op)
     end
