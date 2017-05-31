@@ -33,10 +33,11 @@ type arg =
   | Var of string
 
 type cc =                  (* TODO: fill in rest of condition codes *)
-  | LE
+  | E | NE | LE | LT | GT | GE
 
 type instruction =
   | IMov of arg * arg
+  | IMovZx of arg * arg
   | IAdd of arg * arg
   | ISub of arg * arg
   | IMul of arg * arg
@@ -83,7 +84,7 @@ let rec instr_to_x86 instr =
   | Instr2(op, arg1, arg2) ->
     begin
       match op with
-      | "add" -> 
+      | "add" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           IAdd(Reg(RAX), get_arg_val arg2); ]
       | "mul" ->
@@ -92,9 +93,68 @@ let rec instr_to_x86 instr =
       | "sub" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           ISub(Reg(RAX), get_arg_val arg2) ]
-      | "cslew" ->
+        
+      (* TODO: There is a lot of repetetive code for the compare
+         instructions below. It should be simple to factor out all
+         common code. *)
+      | "ceqw" ->
+        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(E, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL)) ]
+      | "ceql" ->
         [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(LE, ByteReg(AL))]
+          ISet(E, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+
+      | "cnew" ->
+        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(NE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "cnel" ->
+        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(NE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+
+      | "cslew" ->
+        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(LE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "cslel" ->
+        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(LE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+
+      | "csltw" ->
+        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(LT, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "csltl" ->
+        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(LT, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+
+      | "csgew" ->
+        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(GE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "csgel" ->
+        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(GE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+
+      | "csgtw" ->
+        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(GT, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "csgtl" ->
+        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(GT, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      (* | "culew" *)
+      (* | "cultw" *)
+      (* | "cugew" *)
+      (* | "cugtw" *)
+    
       | _ -> failwith (Printf.sprintf "NYI: instr_to_x86 %s" op)
     end
   | Instr3(op, arg1, arg2, arg3) ->
@@ -207,11 +267,18 @@ let rec arg_to_asm (a : arg) : string =
 
 let cc_to_asm = function
   | LE -> "le"
-  
+  | E -> "e"
+  | NE -> "ne"
+  | LT -> "l"
+  | GT -> "g"
+  | GE -> "ge"
+    
 let i_to_asm (i : instruction) : string =
   match i with
     | IMov(dest, value) ->
       sprintf "  mov %s, %s" (arg_to_asm dest) (arg_to_asm value)
+    | IMovZx(dest, src) ->
+      sprintf "  movzx %s, %s" (arg_to_asm dest) (arg_to_asm src) 
     | IAdd(dest, to_add) ->
       sprintf "  add %s, %s" (arg_to_asm dest) (arg_to_asm to_add)
     | ISub(dest, to_sub) ->
