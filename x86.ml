@@ -13,6 +13,9 @@ type reg =
   | R8
   | R9
 
+type bytereg =
+  | AL
+
 type size =
   | QWORD_PTR
   | DWORD_PTR
@@ -23,16 +26,23 @@ type arg =
   | Const of int
   | HexConst of int
   | Reg of reg
+  | ByteReg of bytereg
   | RegOffset of int * reg
   | Sized of size * arg
   (* pseudo-arg for before reg. allocation *)
   | Var of string
 
+type cc =                  (* TODO: fill in rest of condition codes *)
+  | LE
+
 type instruction =
   | IMov of arg * arg
   | IAdd of arg * arg
+  | ISub of arg * arg
   | IMul of arg * arg
   | ICmp of arg * arg
+
+  | ISet of cc * arg
             
   | IJne of string
   | IJmp of string
@@ -79,9 +89,12 @@ let rec instr_to_x86 instr =
       | "mul" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           IMul(Reg(RAX), get_arg_val arg2); ]
-      | "sub"
+      | "sub" ->
+        [ IMov(Reg(RAX), get_arg_val arg1);
+          ISub(Reg(RAX), get_arg_val arg2) ]
       | "cslew" ->
-        [ ]                     (* TODO *)
+        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(LE, ByteReg(AL))]
       | _ -> failwith (Printf.sprintf "NYI: instr_to_x86 %s" op)
     end
   | Instr3(op, arg1, arg2, arg3) ->
@@ -134,6 +147,9 @@ let assign_homes (block: instruction list) (mappings : (string, arg) Hashtbl.t)=
   | dest, Var(src) ->
     let src_loc = find_loc src in
     (dest, src_loc)
+  | Sized(size, Var(dest)), src ->
+    let dest_loc = find_loc dest in
+    (Sized(size, dest_loc), src)
   | dest, src ->
     (dest, src)
   in
@@ -164,6 +180,9 @@ let r_to_asm (r : reg) : string =
     | R8  -> "r8"
     | R9  -> "r9"
 
+let br_to_asm = function
+  | AL -> "al"
+
 let s_to_asm (s : size) : string =
   match s with
   | DWORD_PTR -> "DWORD"
@@ -176,6 +195,7 @@ let rec arg_to_asm (a : arg) : string =
   | Const(n) -> sprintf "%d" n
   | HexConst(n) -> sprintf "0x%X" n
   | Reg(r) -> r_to_asm r
+  | ByteReg(br) -> br_to_asm br
   | RegOffset(n, r) ->
     if n >= 0 then
       sprintf "[%s+%d]" (r_to_asm r) n
@@ -183,20 +203,27 @@ let rec arg_to_asm (a : arg) : string =
       sprintf "[%s-%d]" (r_to_asm r) (-1 * n)
   | Sized(s, a) ->
     sprintf "%s %s" (s_to_asm s) (arg_to_asm a)
-  | _ -> failwith "NYI"
+  | _ -> failwith (sprintf "NYI: %s" (ExtLib.dump a))
 
+let cc_to_asm = function
+  | LE -> "le"
+  
 let i_to_asm (i : instruction) : string =
   match i with
     | IMov(dest, value) ->
       sprintf "  mov %s, %s" (arg_to_asm dest) (arg_to_asm value)
     | IAdd(dest, to_add) ->
       sprintf "  add %s, %s" (arg_to_asm dest) (arg_to_asm to_add)
+    | ISub(dest, to_sub) ->
+      sprintf "  sub %s, %s" (arg_to_asm dest) (arg_to_asm to_sub)
     | IMul(dest, to_mul) ->
       sprintf "  mul %s, %s" (arg_to_asm dest) (arg_to_asm to_mul)
     | ICmp(left, right) ->
       sprintf "  cmp %s, %s" (arg_to_asm left) (arg_to_asm right)
     | ILabel(name) ->
       sprintf "%s:" name
+    | ISet(cond, dest) ->
+      sprintf "  set%s %s" (cc_to_asm cond) (arg_to_asm dest)
     | IJne(label) ->
       sprintf "  jne %s" label
     | IJmp(arg) ->
@@ -236,7 +263,7 @@ let asm_of_func (func : qbe) : string =
 %s"
       (get_ident_name name)
       (8*num_vars)
-      (name ^ "_start")
+      (get_ident_name name ^ "_start")
       (to_asm compiled_blocks)
   | _ -> failwith "NYI"
 
