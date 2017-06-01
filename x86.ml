@@ -4,14 +4,22 @@ open ExtLib
 
 type reg =
   | RAX
+  | RBX
+  | RCX
+  | RDX
   | RSP
   | RBP
   | RDI
   | RSI
-  | RDX
-  | RCX
+
   | R8
   | R9
+  | R10
+  | R11
+  | R12
+  | R13
+  | R14
+  | R15
 
 type bytereg =
   | AL
@@ -47,10 +55,25 @@ type instruction =
   | ISet of cc * arg
             
   | IJne of string
+  | IJe of string
   | IJmp of string
+  | ICall of string
   | IRet
 
+  | IPush of arg
+  | IPop of arg
+
   | ILabel of string
+
+
+let arg_reg_order = List.map (fun r -> Reg(r))
+    [RDI; RSI; RDX; RCX; R8; R9]
+
+let caller_save_regs = List.map (fun r -> Reg(r))
+    [RDX; RCX; RSI; RDI; R8; R9; R10; R11]
+
+let callee_save_regs = List.map (fun r -> Reg(r))
+    [RBX; R12; R13; R14; R15]
 
 let get_ident_name = function
   | GlobalIdent(id) | FuncIdent(id) -> id
@@ -203,8 +226,18 @@ let rec instr_to_x86 instr =
         ]
       | _ -> failwith "NYI"
     end
-    
-  | _ -> failwith "NYI"
+  | Call(GlobalIdent(fn), args) ->
+    (* save caller-save registers *)
+    (List.map (fun r -> IPush(r)) caller_save_regs) @
+    (* TODO: handle more than 6 args *)
+    (List.map2 (fun (ty, arg) reg ->
+        IMov(reg, get_arg_val arg))
+        (List.take 6 (List.rev args))
+        (List.take (min 6 (List.length args)) arg_reg_order)) @
+    [ ICall(fn) ] @
+    (* Restore caller-save registers *)
+    (List.map (fun r -> IPop(r)) (List.rev caller_save_regs))
+  | _ -> failwith "NYI: instr_to_x86"
 
 let block_to_x86 block =
   match block with
@@ -263,15 +296,22 @@ let assign_homes (block: instruction list) (mappings : (string, arg) Hashtbl.t)=
 
 let r_to_asm (r : reg) : string =
   match r with
-    | RAX -> "rax"
-    | RSP -> "rsp"
-    | RBP -> "rbp"
-    | RDI -> "rdi"
-    | RSI -> "rsi"
-    | RDX -> "rdx"
-    | RCX -> "rcx"
-    | R8  -> "r8"
-    | R9  -> "r9"
+  | RAX -> "rax"
+  | RBX -> "rbx"
+  | RCX -> "rcx"
+  | RDX -> "rdx"
+  | RSP -> "rsp"
+  | RBP -> "rbp"
+  | RDI -> "rdi"
+  | RSI -> "rsi"
+  | R8  -> "r8"
+  | R9  -> "r9"
+  | R10 -> "r10"
+  | R11 -> "r11"
+  | R12 -> "r12"
+  | R13 -> "r13"
+  | R14 -> "r14"
+  | R15 -> "r15"
 
 let br_to_asm = function
   | AL -> "al"
@@ -305,6 +345,10 @@ let cc_to_asm = function
   | LT -> "l"
   | GT -> "g"
   | GE -> "ge"
+  | A -> "a"
+  | AE -> "ae"
+  | B -> "b"
+  | BE -> "be"
     
 let i_to_asm (i : instruction) : string =
   match i with
@@ -324,17 +368,33 @@ let i_to_asm (i : instruction) : string =
       sprintf "%s:" name
     | ISet(cond, dest) ->
       sprintf "  set%s %s" (cc_to_asm cond) (arg_to_asm dest)
+    | IJe(label) ->
+      sprintf "  je %s" label
     | IJne(label) ->
       sprintf "  jne %s" label
     | IJmp(arg) ->
       sprintf "  jmp %s" arg
+    | ICall(label) ->
+      sprintf "  call %s" label
+    | IPush(arg) ->
+      sprintf "  push %s" (arg_to_asm arg)
+    | IPop(arg) ->
+      sprintf "  pop %s" (arg_to_asm arg)
     | IRet ->
-      "  mov rsp, rbp
+      let restore_callee_save_regs = (List.fold_left (fun acc r ->
+          let r = match r with
+            | Reg(reg) -> reg
+            | _ -> failwith "expected Reg"
+          in
+          acc ^ (sprintf "  pop %s\n" (r_to_asm r)))
+          ""
+          (List.rev callee_save_regs))
+      in
+      sprintf "%s
+  mov rsp, rbp
   pop rbp
-  ret"
+  ret" restore_callee_save_regs
 
-let arg_reg_order = List.map (fun r -> Reg(r))
-    [RDI; RSI; RDX; RCX; R8; R9]
 
 let to_asm (is : instruction list) : string =
   List.fold_left (fun s i -> sprintf "%s\n%s" s (i_to_asm i)) "" is
@@ -346,7 +406,7 @@ let asm_of_func (func : qbe) : string =
     (* TODO: Handle more than 6 args *)
     ignore (List.map2 (fun (ty, arg) reg ->
         Hashtbl.add mappings (get_ident_name arg) reg)
-        (List.take 6 args)
+        (List.take 6 (List.rev args))
         (List.take (min 6 (List.length args)) arg_reg_order));
     let (num_vars, compiled_blocks) =
       blocks
@@ -355,17 +415,40 @@ let asm_of_func (func : qbe) : string =
       |> List.flatten
       |> (fun x -> assign_homes x mappings)
     in
-    Printf.sprintf "%s:
+    let save_callee_save_regs = (List.fold_left (fun acc r ->
+        let r = match r with
+          | Reg(reg) -> reg
+          | _ -> failwith "expected Reg"
+        in
+        acc ^ (sprintf "  push %s\n" (r_to_asm r)))
+        ""
+        callee_save_regs)
+    in
+    Printf.sprintf "section .text
+global foo
+%s:
   push rbp
   mov rbp, rsp
   sub rsp, %d
+%s
   jmp %s
 %s"
       (get_ident_name name)
       (8*num_vars)
+      save_callee_save_regs
       (get_ident_name name ^ "_start")
       (to_asm compiled_blocks)
   | _ -> failwith "NYI"
+
+let compile_to_file func_string =
+  let func = Qbe_lexer.stream_of_string func_string in
+  let parsed_func = Qbe_parser.parse_function func true in
+  let dessad = Cfg.de_ssa parsed_func in
+  let compiled = asm_of_func dessad in
+
+  let oc = open_out "test.s" in
+  fprintf oc "%s" compiled;
+  close_out oc
 
 (*
 
