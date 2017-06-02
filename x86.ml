@@ -103,6 +103,20 @@ let rec instr_to_x86 instr =
       | "ret" ->
         [ IMov(Reg(RAX), get_arg_val arg);
           IRet ]
+      (* Allocate *)
+      (* TODO: perform checks on arguments *)
+      | "alloc4" ->
+        let num_bytes = get_arg_val arg in
+        [ ISub(Reg(RSP), num_bytes);
+          IMov(Reg(RAX), Reg(RSP)) ]
+      | "alloc8" ->
+        let num_bytes = get_arg_val arg in
+        [ ISub(Reg(RSP), num_bytes);
+          IMov(Reg(RAX), Reg(RSP)) ]
+      | "alloc16" ->
+        let num_bytes = get_arg_val arg in
+        [ ISub(Reg(RSP), num_bytes);
+          IMov(Reg(RAX), Reg(RSP)) ]
       | _ -> failwith "NYI"
     end
   | Instr2(op, arg1, arg2) ->
@@ -210,7 +224,15 @@ let rec instr_to_x86 instr =
         [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
           ISet(A, ByteReg(AL));
           IMovZx(Reg(RAX), ByteReg(AL))]
-    
+
+      (* Store *)
+      | "storew" ->
+        let v = get_arg_val arg1 in
+        let dest = get_arg_val arg2 in
+        [ IMov(Reg(RAX), dest);
+          IMov(Sized(QWORD_PTR, RegOffset(0, RAX)), v) ]
+      | "storel" -> failwith "NYI: storel"
+
       | _ -> failwith (Printf.sprintf "NYI: instr_to_x86 %s" op)
     end
   | Instr3(op, arg1, arg2, arg3) ->
