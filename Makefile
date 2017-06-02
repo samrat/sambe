@@ -16,5 +16,12 @@ build: myutop.mltop
 	mv _build/myutop.top .
 	chmod +x myutop.top
 
+test: test.s
+	nasm -f elf64 test.s
+	gcc -c test_main.c
+	gcc test.o test_main.o
+	rm test_main.o
+	rm test.o
+
 clean:
 	$(OC) -clean
