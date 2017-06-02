@@ -47,6 +47,7 @@ type cc =
 type instruction =
   | IMov of arg * arg
   | IMovZx of arg * arg
+  | IMovSx of arg * arg
   | IAdd of arg * arg
   | ISub of arg * arg
   | IMul of arg * arg
@@ -115,6 +116,20 @@ let rec instr_to_x86 instr =
         let padding = num_bytes mod 16 in
         [ ISub(Reg(RSP), Const(num_bytes + padding));
           IMov(Reg(RAX), Reg(RSP)) ]
+
+      (* Load *)
+      | "loadw" ->
+        let addr = get_arg_val arg in
+        [ IMov(Reg(RAX), addr);
+          IMov(Sized(DWORD_PTR, Reg(RAX)), RegOffset(0, RAX))]
+      | "loadl" ->
+        let addr = get_arg_val arg in
+        [ IMov(Reg(RAX), addr);
+          IMov(Sized(QWORD_PTR, Reg(RAX)), RegOffset(0, RAX))]
+      | "loadsb" ->
+        let addr = get_arg_val arg in
+        [ IMov(Reg(RAX), addr);
+          IMovSx(Reg(RAX), Sized(BYTE_PTR, RegOffset(0, RAX)))]
       | _ -> failwith "NYI"
     end
   | Instr2(op, arg1, arg2) ->
@@ -375,7 +390,9 @@ let i_to_asm (i : instruction) : string =
     | IMov(dest, value) ->
       sprintf "  mov %s, %s" (arg_to_asm dest) (arg_to_asm value)
     | IMovZx(dest, src) ->
-      sprintf "  movzx %s, %s" (arg_to_asm dest) (arg_to_asm src) 
+      sprintf "  movzx %s, %s" (arg_to_asm dest) (arg_to_asm src)
+    | IMovSx(dest, src) ->
+      sprintf "  movsx %s, %s" (arg_to_asm dest) (arg_to_asm src)
     | IAdd(dest, to_add) ->
       sprintf "  add %s, %s" (arg_to_asm dest) (arg_to_asm to_add)
     | ISub(dest, to_sub) ->
