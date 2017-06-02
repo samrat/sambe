@@ -51,6 +51,9 @@ type instruction =
   | IAdd of arg * arg
   | ISub of arg * arg
   | IMul of arg * arg
+  | IShr of arg * arg
+  | ISar of arg * arg
+  | IShl of arg * arg
   | ICmp of arg * arg
 
   | ISet of cc * arg
@@ -135,6 +138,9 @@ let rec instr_to_x86 instr =
   | Instr2(op, arg1, arg2) ->
     begin
       match op with
+      (* Arithmetic/logic *)
+      (* TODO: perform only the necessary instruction here. Add
+         another pass to move to the "scratch" register. *)
       | "add" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           IAdd(Reg(RAX), get_arg_val arg2); ]
@@ -144,6 +150,15 @@ let rec instr_to_x86 instr =
       | "sub" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           ISub(Reg(RAX), get_arg_val arg2) ]
+      | "sar" ->
+        [ IMov(Reg(RAX), get_arg_val arg1);
+          ISar(Reg(RAX), get_arg_val arg2) ]
+      | "shr" ->
+        [ IMov(Reg(RAX), get_arg_val arg1);
+          ISar(Reg(RAX), get_arg_val arg2) ]
+      | "shl" ->
+        [ IMov(Reg(RAX), get_arg_val arg1);
+          IShl(Reg(RAX), get_arg_val arg2) ]
         
       (* TODO: There is a lot of repetetive code for the compare
          instructions below. It should be simple to factor out all
@@ -399,6 +414,12 @@ let i_to_asm (i : instruction) : string =
       sprintf "  sub %s, %s" (arg_to_asm dest) (arg_to_asm to_sub)
     | IMul(dest, to_mul) ->
       sprintf "  mul %s, %s" (arg_to_asm dest) (arg_to_asm to_mul)
+    | IShr(dest, shift) ->
+      sprintf "  shr %s, %s" (arg_to_asm dest) (arg_to_asm shift)
+    | ISar(dest, shift) ->
+      sprintf "  sar %s, %s" (arg_to_asm dest) (arg_to_asm shift)
+    | IShl(dest, shift) ->
+      sprintf "  shl %s, %s" (arg_to_asm dest) (arg_to_asm shift)
     | ICmp(left, right) ->
       sprintf "  cmp %s, %s" (arg_to_asm left) (arg_to_asm right)
     | ILabel(name) ->
