@@ -84,7 +84,7 @@ let read_keyword ls =
     end
   | _ -> failwith "expected ident"
 
-let read_int ls =
+let read_int ls neg =
   let rec read_int' acc =
     match peek_char ls with
     | Some c ->
@@ -93,10 +93,15 @@ let read_int ls =
         let _ = read_char ls in
         read_int' (acc*10 + (Char.code c - Char.code '0'))
       else
-        Integer(acc)
-    | None -> Integer(acc)
+        acc
+    | None -> acc
   in
-  read_int' 0
+  if neg
+  then begin
+    ignore (read_char ls);
+    Integer(-1 * (read_int' 0))
+  end
+  else Integer(read_int' 0)
 
 let rec skip_whitespace ls =
   match peek_char ls with
@@ -168,7 +173,8 @@ and next_token ls =
       match peek_char ls with
       | Some(c) when is_ident_start c -> read_ident ls
       | Some(c) when is_alpha c -> read_keyword ls
-      | Some(c) when is_digit c -> read_int ls
+      | Some(c) when is_digit c -> read_int ls false
+      | Some('-') -> read_int ls true
       | Some('"') -> read_string ls
       | Some('#') ->
         let _ = skip_comment ls in
