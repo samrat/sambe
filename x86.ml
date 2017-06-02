@@ -104,18 +104,16 @@ let rec instr_to_x86 instr =
         [ IMov(Reg(RAX), get_arg_val arg);
           IRet ]
       (* Allocate *)
-      (* TODO: perform checks on arguments *)
-      | "alloc4" ->
-        let num_bytes = get_arg_val arg in
-        [ ISub(Reg(RSP), num_bytes);
-          IMov(Reg(RAX), Reg(RSP)) ]
-      | "alloc8" ->
-        let num_bytes = get_arg_val arg in
-        [ ISub(Reg(RSP), num_bytes);
-          IMov(Reg(RAX), Reg(RSP)) ]
-      | "alloc16" ->
-        let num_bytes = get_arg_val arg in
-        [ ISub(Reg(RSP), num_bytes);
+      (* NOTE: TODO: when there are multiple alloc's in a block, this
+         will be really space-inefficient. We need to figure out the
+         total no. of bytes required in block and then align
+         accordingly. *)
+      | "alloc4" | "alloc8" | "alloc16" ->
+        let num_bytes = (match get_arg_val arg with
+            | Const(i) -> i
+            | _ -> failwith "expected constant") in
+        let padding = num_bytes mod 16 in
+        [ ISub(Reg(RSP), Const(num_bytes + padding));
           IMov(Reg(RAX), Reg(RSP)) ]
       | _ -> failwith "NYI"
     end
