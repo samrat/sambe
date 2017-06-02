@@ -90,9 +90,9 @@ let get_label = function
 
 let rec instr_to_x86 instr =
   match instr with
-  | Assign(dest, ty, src_instr) ->
+  | Assign(dest, typ, src_instr) ->
     instr_to_x86 src_instr @
-    [ IMov(get_arg_val dest, Reg(RAX))]
+    [ IMov(get_arg_val dest, Reg(RAX)) ]
   | Instr1(op, arg) ->
     begin
       match op with
