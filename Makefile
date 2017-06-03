@@ -1,8 +1,7 @@
 OC := ocamlbuild -classic-display -no-links -use-ocamlfind
 
-backtrace: parser.ml lexer.ml
-	ocamlbuild -tag 'debug' -r -use-ocamlfind -package extlib parser.native
-	OCAMLRUNPARAM=b ./parser.native
+sambe:
+	ocamlbuild -tag 'debug' -r -use-ocamlfind -package extlib sambe.native
 
 test_suite:
 	ocamlbuild -tag 'debug' -r -use-ocamlfind -package oUnit,extlib test.native
