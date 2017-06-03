@@ -51,10 +51,12 @@ type instruction =
   | IAdd of arg * arg
   | ISub of arg * arg
   | IMul of arg * arg
+  | IDiv of arg
   | IShr of arg * arg
   | ISar of arg * arg
   | IShl of arg * arg
   | ICmp of arg * arg
+  | ICdq
 
   | ISet of cc * arg
             
@@ -76,8 +78,9 @@ let arg_reg_order = List.map (fun r -> Reg(r))
 let caller_save_regs = List.map (fun r -> Reg(r))
     [RDX; RCX; RSI; RDI; R8; R9; R10; R11]
 
+(* NOTE: RBX is used as a scratch buffer *)
 let callee_save_regs = List.map (fun r -> Reg(r))
-    [RBX; R12; R13; R14; R15]
+    [R12; R13; R14; R15]
 
 let get_ident_name = function
   | GlobalIdent(id) | FuncIdent(id) -> id
@@ -91,6 +94,13 @@ let get_arg_val = function
 let get_label = function
   | BlockLabel(label) -> label
   | _ -> failwith "expected BlockLabel"
+
+let lookup x env =
+  let rec lookup' = function
+    | [] -> None
+    | (v,typ) as l::ls -> if x = v then Some(l) else lookup' ls
+  in
+  lookup' env
 
 let rec instr_to_x86 instr =
   match instr with
@@ -144,12 +154,24 @@ let rec instr_to_x86 instr =
       | "add" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           IAdd(Reg(RAX), get_arg_val arg2); ]
-      | "mul" ->
-        [ IMov(Reg(RAX), get_arg_val arg1);
-          IMul(Reg(RAX), get_arg_val arg2); ]
       | "sub" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           ISub(Reg(RAX), get_arg_val arg2) ]
+      | "mul" ->
+        [ IMov(Reg(RAX), get_arg_val arg1);
+          IMul(Reg(RAX), get_arg_val arg2); ]
+      (* TODO: move arg2 to register *)
+      | "div" ->
+        [ IMov(Reg(RAX), get_arg_val arg1);
+          IMov(Reg(RBX), get_arg_val arg2);
+          ICdq;
+          IDiv(Reg(RBX)); ]
+      | "rem" ->
+        [ IMov(Reg(RAX), get_arg_val arg1);
+          IMov(Reg(RBX), get_arg_val arg2);
+          ICdq;
+          IDiv(Reg(RBX));
+          IMov(Reg(RAX), Reg(RDX));]
       | "sar" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           ISar(Reg(RAX), get_arg_val arg2) ]
@@ -414,6 +436,8 @@ let i_to_asm (i : instruction) : string =
       sprintf "  sub %s, %s" (arg_to_asm dest) (arg_to_asm to_sub)
     | IMul(dest, to_mul) ->
       sprintf "  mul %s, %s" (arg_to_asm dest) (arg_to_asm to_mul)
+    | IDiv(denom) ->            (* numerator goes in RAX *)
+      sprintf "  idiv %s" (arg_to_asm denom)
     | IShr(dest, shift) ->
       sprintf "  shr %s, %s" (arg_to_asm dest) (arg_to_asm shift)
     | ISar(dest, shift) ->
@@ -422,6 +446,7 @@ let i_to_asm (i : instruction) : string =
       sprintf "  shl %s, %s" (arg_to_asm dest) (arg_to_asm shift)
     | ICmp(left, right) ->
       sprintf "  cmp %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | ICdq -> "  cdq"
     | ILabel(name) ->
       sprintf "%s:" name
     | ISet(cond, dest) ->
