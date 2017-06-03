@@ -51,7 +51,8 @@ type instruction =
   | IAdd of arg * arg
   | ISub of arg * arg
   | IMul of arg * arg
-  | IDiv of arg
+  | ISDiv of arg
+  | IUDiv of arg
   | IShr of arg * arg
   | ISar of arg * arg
   | IShl of arg * arg
@@ -165,12 +166,23 @@ let rec instr_to_x86 instr =
         [ IMov(Reg(RAX), get_arg_val arg1);
           IMov(Reg(RBX), get_arg_val arg2);
           ICdq;
-          IDiv(Reg(RBX)); ]
+          ISDiv(Reg(RBX)); ]
       | "rem" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           IMov(Reg(RBX), get_arg_val arg2);
           ICdq;
-          IDiv(Reg(RBX));
+          ISDiv(Reg(RBX));
+          IMov(Reg(RAX), Reg(RDX));]
+      | "udiv" ->
+        [ IMov(Reg(RAX), get_arg_val arg1);
+          IMov(Reg(RBX), get_arg_val arg2);
+          ICdq;
+          IUDiv(Reg(RBX)); ]
+      | "urem" ->
+        [ IMov(Reg(RAX), get_arg_val arg1);
+          IMov(Reg(RBX), get_arg_val arg2);
+          ICdq;
+          IUDiv(Reg(RBX));
           IMov(Reg(RAX), Reg(RDX));]
       | "sar" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
@@ -436,8 +448,10 @@ let i_to_asm (i : instruction) : string =
       sprintf "  sub %s, %s" (arg_to_asm dest) (arg_to_asm to_sub)
     | IMul(dest, to_mul) ->
       sprintf "  mul %s, %s" (arg_to_asm dest) (arg_to_asm to_mul)
-    | IDiv(denom) ->            (* numerator goes in RAX *)
+    | ISDiv(denom) ->           (* numerator goes in RAX *)
       sprintf "  idiv %s" (arg_to_asm denom)
+    | IUDiv(denom) ->           (* numerator goes in RAX *)
+      sprintf "  div %s" (arg_to_asm denom)
     | IShr(dest, shift) ->
       sprintf "  shr %s, %s" (arg_to_asm dest) (arg_to_asm shift)
     | ISar(dest, shift) ->
