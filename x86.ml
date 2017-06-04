@@ -88,9 +88,10 @@ let get_ident_name = function
   | _ -> failwith "NYI"
 
 let get_arg_val = function
+  | GlobalIdent(id) -> Var(id)
   | FuncIdent(id) -> Var(id)
   | Integer(i) -> Const(i)
-  | _ -> failwith "NYI"
+  | _ -> failwith "NYI: get_arg_val"
 
 let get_label = function
   | BlockLabel(label) -> label
@@ -420,6 +421,8 @@ let rec arg_to_asm (a : arg) : string =
       sprintf "[%s-%d]" (r_to_asm r) (-1 * n)
   | Sized(s, a) ->
     sprintf "%s %s" (s_to_asm s) (arg_to_asm a)
+  | Var(v) ->
+    sprintf "%s" v
   | _ -> failwith (sprintf "NYI: %s" (ExtLib.dump a))
 
 let cc_to_asm = function
@@ -496,15 +499,20 @@ let i_to_asm (i : instruction) : string =
 let to_asm (is : instruction list) : string =
   List.fold_left (fun s i -> sprintf "%s\n%s" s (i_to_asm i)) "" is
 
-let asm_of_func (func : qbe) : string =
+let asm_of_func (func: qbe) (data_def_names: string list)  : string =
   match func with
   | FunDef(_, _, name, args, blocks) ->
     let mappings : (string, arg) Hashtbl.t = Hashtbl.create 16 in
     (* TODO: Handle more than 6 args *)
+    (* Add args to `mappings` *)
     ignore (List.map2 (fun (ty, arg) reg ->
         Hashtbl.add mappings (get_ident_name arg) reg)
         (List.take 6 (List.rev args))
         (List.take (min 6 (List.length args)) arg_reg_order));
+    (* Add data defs to `mappings` *)
+    ignore (List.map (fun data_def ->
+        Hashtbl.add mappings data_def (Var(data_def)))
+        data_def_names);
     let (num_vars, compiled_blocks) =
       blocks
       |> Cfg.uniquify_block_labels (get_ident_name name)
@@ -562,12 +570,6 @@ let asm_of_data = function
   | _ -> failwith "expected data"
 
 
-let compile_toplevel top =
-  match top with
-  | FunDef(_, _, _, _, _) -> asm_of_func top
-  | DataDef(_, _, _) -> asm_of_data top
-  | _ -> failwith "NYI: compile_toplevel"
-
 let segregate_toplevel_defs defs =
   List.fold_left (fun (data, typs, funcs) def ->
       match def with
@@ -585,9 +587,13 @@ let compile_to_file prog_string =
   let dessad = List.map Cfg.de_ssa parsed_list in
   let (data_defs, type_defs, func_defs) = 
     segregate_toplevel_defs dessad in
-  let compiled_data_defs = List.fold_left (fun acc x -> acc ^ (compile_toplevel x)) "" data_defs in
+  let data_def_names = List.map (fun data_def -> match data_def with
+      | DataDef(_, GlobalIdent(name), _) -> name
+      | _ -> failwith "DataDef expected")
+      data_defs in
+  let compiled_data_defs = List.fold_left (fun acc x -> acc ^ (asm_of_data x)) "" data_defs in
   (* let compiled_type_defs = List.fold_left (fun acc x -> acc ^ (compile_toplevel x)) "" type_defs in *)
-  let compiled_func_defs = List.fold_left (fun acc x -> acc ^ (compile_toplevel x)) "" func_defs in
+  let compiled_func_defs = List.fold_left (fun acc x -> acc ^ (asm_of_func x data_def_names)) "" func_defs in
 
   let compiled =
     "section .data" ^ compiled_data_defs ^
