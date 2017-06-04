@@ -521,8 +521,7 @@ let asm_of_func (func : qbe) : string =
         ""
         callee_save_regs)
     in
-    Printf.sprintf "\nsection .text
-global foo
+    Printf.sprintf "\nglobal %s
 %s:
   push rbp
   mov rbp, rsp
@@ -530,6 +529,7 @@ global foo
 %s
   jmp %s
 %s"
+      (get_ident_name name)
       (get_ident_name name)
       (8*num_vars)
       save_callee_save_regs
@@ -558,7 +558,7 @@ let asm_of_data = function
         (fun acc x -> acc ^ "\n  " ^ x)
         ""
         (List.map field_vals_str fields) in
-    (sprintf "section .data\n%s: %s" (get_ident_name name) s)
+    (sprintf "\n%s: %s" (get_ident_name name) s)
   | _ -> failwith "expected data"
 
 
@@ -567,15 +567,32 @@ let compile_toplevel top =
   | FunDef(_, _, _, _, _) -> asm_of_func top
   | DataDef(_, _, _) -> asm_of_data top
   | _ -> failwith "NYI: compile_toplevel"
-  
+
+let segregate_toplevel_defs defs =
+  List.fold_left (fun (data, typs, funcs) def ->
+      match def with
+      | FunDef(_, _, _, _, _) -> (data, typs, def::funcs)
+      | DataDef(_, _, _) -> (def::data, typs, funcs)
+      | TypeDef(_, _, _) -> (data, def::typs, funcs)
+      | _ -> failwith "expected top level definition")
+    ([], [], [])
+    defs
 
 let compile_to_file prog_string =
   let prog_stream = Qbe_lexer.stream_of_string prog_string in
   let parsed_list = Qbe_parser.get_parsed_list prog_stream in
   (* TODO: compose functions to avoid repeated maps *)
   let dessad = List.map Cfg.de_ssa parsed_list in
-  let compiled = List.map compile_toplevel dessad in
-  let compiled = List.fold_left (^) "" compiled in
+  let (data_defs, type_defs, func_defs) = 
+    segregate_toplevel_defs dessad in
+  let compiled_data_defs = List.fold_left (fun acc x -> acc ^ (compile_toplevel x)) "" data_defs in
+  (* let compiled_type_defs = List.fold_left (fun acc x -> acc ^ (compile_toplevel x)) "" type_defs in *)
+  let compiled_func_defs = List.fold_left (fun acc x -> acc ^ (compile_toplevel x)) "" func_defs in
+
+  let compiled =
+    "section .data" ^ compiled_data_defs ^
+    (* TODO: type defs *)
+    "\nsection .text" ^ compiled_func_defs in
 
   let oc = open_out "test.s" in
   fprintf oc "%s" compiled;
