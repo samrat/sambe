@@ -142,7 +142,7 @@ let dom_solver preds (all_nodes : qbe list) start =
 *)
 let de_ssa fn =
   match fn with
-  | DataDef(_, _, _) -> fn
+  | TypeDef(_, _, _) | DataDef(_, _, _) -> fn
   | FunDef(_, _, _, _, _) -> 
     let (export, retty, name, params, blocks) = match fn with
       | FunDef(export, retty, name, params, blocks) -> 
@@ -189,6 +189,7 @@ let de_ssa fn =
         blocks
       |> List.rev
     in FunDef(export, retty, name, params, new_blocks)
+  | _ -> failwith "expected a top-level definition"
 
 let rec uniquify_block_labels func_name blocks =
   let uniq_of_label label = func_name ^ "_" ^ label in
