@@ -547,8 +547,8 @@ let asm_of_data = function
     in
     let get_size_char = function
       | ExtTy(B) -> "b"
-      | BaseTy(W) -> "w"
-      | BaseTy(L) -> "q"
+      | BaseTy(W) -> "w"        (* 32-bit *)
+      | BaseTy(L) -> "q"        (* 64-bit *)
       | _ -> failwith "NYI" in
     let field_vals_str (typ, vs) = List.fold_left 
         (fun acc x -> acc ^ (Printf.sprintf "%d, " (get_int_val x))) 
