@@ -521,7 +521,7 @@ let asm_of_func (func : qbe) : string =
         ""
         callee_save_regs)
     in
-    Printf.sprintf "section .text
+    Printf.sprintf "\nsection .text
 global foo
 %s:
   push rbp
@@ -535,13 +535,47 @@ global foo
       save_callee_save_regs
       (get_ident_name name ^ "_start")
       (to_asm compiled_blocks)
-  | _ -> failwith "NYI"
+  | _ -> failwith "expected function"
 
-let compile_to_file func_string =
-  let func = Qbe_lexer.stream_of_string func_string in
-  let parsed_func = Qbe_parser.parse_function func true in
-  let dessad = Cfg.de_ssa parsed_func in
-  let compiled = asm_of_func dessad in
+
+let asm_of_data = function
+  | DataDef(export, name, fields) ->
+    (* "ret: dq 0" *)
+    let get_int_val = function
+      | Integer(i) -> i
+      | _ -> failwith "expected Integer"
+    in
+    let get_size_char = function
+      | ExtTy(B) -> "b"
+      | BaseTy(W) -> "w"
+      | BaseTy(L) -> "q"
+      | _ -> failwith "NYI" in
+    let field_vals_str (typ, vs) = List.fold_left 
+        (fun acc x -> acc ^ (Printf.sprintf "%d, " (get_int_val x))) 
+        (sprintf "d%s " (get_size_char typ))
+        vs in
+    let s = List.fold_left
+        (fun acc x -> acc ^ "\n  " ^ x)
+        ""
+        (List.map field_vals_str fields) in
+    (sprintf "section .data\n%s: %s" (get_ident_name name) s)
+  | _ -> failwith "expected data"
+
+
+let compile_toplevel top =
+  match top with
+  | FunDef(_, _, _, _, _) -> asm_of_func top
+  | DataDef(_, _, _) -> asm_of_data top
+  | _ -> failwith "NYI: compile_toplevel"
+  
+
+let compile_to_file prog_string =
+  let prog_stream = Qbe_lexer.stream_of_string prog_string in
+  let parsed_list = Qbe_parser.get_parsed_list prog_stream in
+  (* TODO: compose functions to avoid repeated maps *)
+  let dessad = List.map Cfg.de_ssa parsed_list in
+  let compiled = List.map compile_toplevel dessad in
+  let compiled = List.fold_left (^) "" compiled in
 
   let oc = open_out "test.s" in
   fprintf oc "%s" compiled;

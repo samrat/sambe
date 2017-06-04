@@ -155,32 +155,28 @@ let rec skip_comment ls =
 let rec peek_token ls =
   match ls.next_token with
   | None ->
-    let _ = ls.next_token <- Some(next_token ls) in
-    begin
-    match ls.next_token with
-    | Some(tok) -> tok
-    | None -> failwith "no more tokens"
-    end
-  | Some(tok) -> tok
+    let _ = ls.next_token <- (next_token ls) in
+    ls.next_token
+  | Some(tok) -> Some(tok)
 and next_token ls =
   match ls.next_token with
   | Some(tok) ->
     let _ = ls.next_token <- None
-    in tok
+    in Some(tok)
   | None ->
     begin
       skip_whitespace ls;
       match peek_char ls with
-      | Some(c) when is_ident_start c -> read_ident ls
-      | Some(c) when is_alpha c -> read_keyword ls
-      | Some(c) when is_digit c -> read_int ls false
-      | Some('-') -> read_int ls true
-      | Some('"') -> read_string ls
+      | Some(c) when is_ident_start c -> Some(read_ident ls)
+      | Some(c) when is_alpha c -> Some(read_keyword ls)
+      | Some(c) when is_digit c -> Some(read_int ls false)
+      | Some('-') -> Some(read_int ls true)
+      | Some('"') -> Some(read_string ls)
       | Some('#') ->
         let _ = skip_comment ls in
         next_token ls
-      | Some(c) -> read_symbol ls c
-      | None -> failwith "No more tokens"
+      | Some(c) -> Some(read_symbol ls c)
+      | None -> None
     end
 
 (*

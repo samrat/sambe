@@ -78,12 +78,12 @@ and qbe =
 
 let expect ls tok =
   match peek_token ls with
-  | t when t = tok -> ignore (next_token ls)
+  | Some(t) when t = tok -> ignore (next_token ls)
   | t -> failwith (Printf.sprintf "expected %s but got %s" (dump tok) (dump t))
 
-let get_op (kw : token) =
+let get_op (kw : token option) =
   match kw with
-  | Keyword(op) -> op
+  | Some(Keyword(op)) -> op
   | _ -> failwith (Printf.sprintf "expected a keyword but instead got: %s" (dump kw))
 
 let ident_of_string s =
@@ -96,20 +96,20 @@ let ident_of_string s =
 
 let ident_of_token t =
   match t with
-  | Ident(id) -> ident_of_string id
+  | Some(Ident(id)) -> ident_of_string id
   | _ -> failwith "expected ident token"
 
-let get_arg (ident : token) : qbe =
+let get_arg (ident : token option) : qbe =
   match ident with
-  | Ident(arg) -> ident_of_string arg
-  | Integer(n) -> Integer(n)
-  | Float(f) -> Float(f)
-  | Double(d) -> Double(d)
+  | Some(Ident(arg)) -> ident_of_string arg
+  | Some(Integer(n)) -> Integer(n)
+  | Some(Float(f)) -> Float(f)
+  | Some(Double(d)) -> Double(d)
   | _ -> failwith (Printf.sprintf "should have been an ident: %s" (dump ident))
 
-let get_type (tystr : token) =
+let get_type (tystr : token option) =
   match tystr with
-  | Ident(ty) ->
+  | Some(Ident(ty)) ->
     begin
       match ty with
       | "s" -> BaseTy(S)
@@ -134,14 +134,14 @@ let ident_type (id : qbe) =
 let get_params ls =
   let rec get_params' acc =
     match peek_token ls with
-    | RParen -> ignore (next_token ls); List.rev acc
-    | Ident(t) ->
+    | Some(RParen) -> ignore (next_token ls); List.rev acc
+    | Some(Ident(t)) ->
       begin
         ignore (next_token ls);
-        let ty = get_type (Ident(t)) in
+        let ty = get_type (Some(Ident(t))) in
         let param = get_arg (next_token ls) in
         let new_params = (ty, param) :: acc in
-        if peek_token ls = Comma
+        if peek_token ls = Some(Comma)
         then begin
           ignore (next_token ls);
           get_params' new_params
@@ -160,7 +160,7 @@ let get_params ls =
 
 let parse_call ls =
   match peek_token ls with
-  | Keyword("call") ->
+  | Some(Keyword("call")) ->
     ignore (next_token ls);
     let fun_name = ident_of_token (next_token ls) in
     let params = get_params ls in
@@ -170,7 +170,7 @@ let parse_call ls =
 
 let parse_instruction ls =
   match peek_token ls with
-  | Ident(dest) ->
+  | Some(Ident(dest)) ->
     begin
       ignore (next_token ls);
       expect ls Equals;
@@ -192,7 +192,7 @@ let parse_instruction ls =
       | _ ->
         ignore (next_token ls);
         let arg1 = next_token ls in
-        if peek_token ls = Comma
+        if peek_token ls = Some(Comma)
         then
           begin
             ignore (next_token ls);
@@ -204,24 +204,25 @@ let parse_instruction ls =
           Assign((ident_of_string dest), get_type rettype,
                  Instr1(op, get_arg arg1))
     end
-  | Keyword("call") ->
+  | Some(Keyword("call")) ->
     parse_call ls
-  | Keyword(op) ->
+  | Some(Keyword(op)) ->
     begin
       ignore (next_token ls);
       if op = "ret" &&
          (match (peek_token ls) with
-          | Ident(id) -> if ident_type (ident_of_string id) = BlockIdent
+          | Some(Ident(id)) ->
+            if ident_type (ident_of_string id) = BlockIdent
             then true else false
           | _ -> false)
       then Instr0("ret")
       else
         let arg1 = get_arg (next_token ls) in
-        if (peek_token ls) = Comma
+        if (peek_token ls) = Some(Comma)
         then begin
           ignore (next_token ls);
           let arg2 = get_arg (next_token ls) in
-          if peek_token ls = Comma
+          if peek_token ls = Some(Comma)
           then
             begin
               ignore (next_token ls);
@@ -233,7 +234,7 @@ let parse_instruction ls =
         else
           Instr1(op, arg1)
     end
-  | _ -> failwith "expected keyword or ident"
+  | _ -> failwith (Printf.sprintf "%d:%d expected keyword or ident" ls.line_num ls.column)
 
 
 let is_phi_instr i =
@@ -254,13 +255,13 @@ let is_last_instr i =
    has already ended(next token is new block label or is RBrace) *)
 let remaining_block_size ls =
   match peek_token ls with
-  | Ident(id) ->
-    if ident_type (ident_of_token (Ident(id))) = BlockIdent
+  | Some(Ident(id)) ->
+    if ident_type (ident_of_token (Some(Ident(id)))) = BlockIdent
     then Some 0 else None
-  | Keyword(kw) -> (match kw with
+  | Some(Keyword(kw)) -> (match kw with
       | "jmp" | "jnz" | "ret" -> Some 1
       | _ -> None)
-  | RBrace -> Some 0
+  | Some(RBrace) -> Some 0
   | _ -> None
 
 (*
@@ -289,7 +290,7 @@ let parse_block ls =
     | Some(_) -> List.rev acc
   in
   match peek_token ls with
-  | Ident(label) ->
+  | Some(Ident(label)) ->
     begin
       ignore (next_token ls);
       (* phi instructions *)
@@ -320,7 +321,7 @@ FUNCDEF :=
 *)
 let parse_function ls export =
   let rec parse_blocks acc =
-    if peek_token ls = RBrace
+    if peek_token ls = Some(RBrace)
     then
       begin
         let last_block = List.hd acc in
@@ -344,7 +345,7 @@ let parse_function ls export =
   in
 
   match peek_token ls with
-  | Keyword("function") ->
+  | Some(Keyword("function")) ->
     begin
       ignore (next_token ls);
       (* TODO: type can be either ident(aggregated type) or keyword *)
@@ -364,16 +365,16 @@ let parse_function ls export =
 let parse_typedef ls =
   let rec parse_items acc =
     match peek_token ls with
-    | RBrace -> List.rev acc
-    | Ident(ty) ->
+    | Some(RBrace) -> List.rev acc
+    | Some(Ident(ty)) ->
       begin
-        let item = (get_type (Ident(ty))) in
+        let item = (get_type (Some(Ident(ty)))) in
         ignore (next_token ls);
         let num = (match peek_token ls with
-            | Integer(n) -> ignore (next_token ls); n
+            | Some(Integer(n)) -> ignore (next_token ls); n
             | _ -> 1) in
         let newitems = ((item, num) :: acc) in
-        if peek_token ls = Comma
+        if peek_token ls = Some(Comma)
         then begin
           ignore (next_token ls); 
           parse_items newitems
@@ -383,15 +384,15 @@ let parse_typedef ls =
     | _ -> failwith "syntax error in typedef"
   in
   match peek_token ls with
-  | Keyword("type") ->
+  | Some(Keyword("type")) ->
     ignore (next_token ls);
     let type_name = get_arg (next_token ls) in
     (expect ls Equals);
     let alignment = (match peek_token ls with
-        | Keyword("align") ->
+        | Some(Keyword("align")) ->
           ignore (next_token ls);
           (match (next_token ls) with
-           | Integer(i) -> Some(i)
+           | Some(Integer(i)) -> Some(i)
            | _ -> failwith "expected integer")
         | _ -> None) in
     (expect ls LBrace);
@@ -405,30 +406,30 @@ let parse_datadef ls export =
   let rec parse_items acc =
     let rec parse_dataitems ds =
       match peek_token ls with
-      | Comma | RBrace -> List.rev ds;
-      | Integer(n) ->
+      | Some(Comma) | Some(RBrace) -> List.rev ds;
+      | Some(Integer(n)) ->
         ignore (next_token ls);
         parse_dataitems (Integer(n)::ds)
-      | Float(n) ->
+      | Some(Float(n)) ->
         ignore (next_token ls);
         parse_dataitems (Float(n)::ds)
-      | Double(n) ->
+      | Some(Double(n)) ->
         ignore (next_token ls);
         parse_dataitems (Double(n)::ds)
-      | String(s) ->
+      | Some(String(s)) ->
         ignore (next_token ls);
         parse_dataitems (String(s)::ds)
       | _ -> failwith "syntax error in dataitems"
     in
     match peek_token ls with
-    | RBrace -> List.rev acc
-    | Ident(ty) ->
+    | Some(RBrace) -> List.rev acc
+    | Some(Ident(ty)) ->
       begin
-        let ty = (get_type (Ident(ty))) in
+        let ty = (get_type (Some(Ident(ty)))) in
         ignore (next_token ls);
         let dataitems = parse_dataitems [] in
         let newitems = ((ty, dataitems) :: acc) in
-        if peek_token ls = Comma
+        if peek_token ls = Some(Comma)
         then begin
           ignore (next_token ls);
           parse_items newitems
@@ -438,7 +439,7 @@ let parse_datadef ls export =
     | _ -> failwith "syntax error in datadef"
   in
   match peek_token ls with
-  | Keyword("data") ->
+  | Some(Keyword("data")) ->
     ignore (next_token ls);
     let data_name = get_arg (next_token ls) in
     (expect ls Equals);
@@ -451,19 +452,29 @@ let parse_datadef ls export =
 
 let parse_func_or_data ls export =
   match peek_token ls with
-  | Keyword("function") -> parse_function ls export
-  | Keyword("data") -> parse_datadef ls export
+  | Some(Keyword("function")) -> parse_function ls export
+  | Some(Keyword("data")) -> parse_datadef ls export
   | _ -> failwith "expected 'function' or 'data'"
 
 let parse_toplevel ls =
   match peek_token ls with
-  | Keyword("export") ->
+  | Some(Keyword("export")) ->
     ignore (next_token ls);
-    parse_func_or_data ls true
-  | Keyword("function") -> parse_function ls false
-  | Keyword("data") -> parse_datadef ls false
-  | Keyword("type") -> parse_typedef ls
+    Some(parse_func_or_data ls true)
+  | Some(Keyword("function")) -> Some(parse_function ls false)
+  | Some(Keyword("data")) -> Some(parse_datadef ls false)
+  | Some(Keyword("type")) -> Some(parse_typedef ls)
+  | None -> None
   | _ -> failwith "not a valid top level def"
+
+let get_parsed_list ls =
+  let rec get_parsed_list' acc =
+    match parse_toplevel ls with
+    | None -> List.rev acc
+    | Some(t) -> get_parsed_list' (t::acc)
+  in
+  get_parsed_list' []
+
 
 (* let () = *)
 (*   let ls = open_stream "mandel.ssa" in *)
