@@ -423,7 +423,6 @@ let rec arg_to_asm (a : arg) : string =
     sprintf "%s %s" (s_to_asm s) (arg_to_asm a)
   | Var(v) ->
     sprintf "%s" v
-  | _ -> failwith (sprintf "NYI: %s" (ExtLib.dump a))
 
 let cc_to_asm = function
   | LE -> "le"
@@ -580,9 +579,9 @@ let segregate_toplevel_defs defs =
     ([], [], [])
     defs
 
-let compile_to_file prog_string =
-  let prog_stream = Qbe_lexer.stream_of_string prog_string in
-  let parsed_list = Qbe_parser.get_parsed_list prog_stream in
+
+let compile_to_file ls oc =
+  let parsed_list = Qbe_parser.get_parsed_list ls in
   (* TODO: compose functions to avoid repeated maps *)
   let dessad = List.map Cfg.de_ssa parsed_list in
   let (data_defs, type_defs, func_defs) = 
@@ -594,7 +593,6 @@ let compile_to_file prog_string =
   let compiled_data_defs = List.fold_left (fun acc x -> acc ^ (asm_of_data x)) "" data_defs in
   (* let compiled_type_defs = List.fold_left (fun acc x -> acc ^ (compile_toplevel x)) "" type_defs in *)
   let compiled_func_defs = List.fold_left (fun acc x -> acc ^ (asm_of_func x data_def_names)) "" func_defs in
-
   let compiled =
     "section .data" ^ compiled_data_defs ^
     (* TODO: type defs *)
@@ -603,6 +601,14 @@ let compile_to_file prog_string =
   let oc = open_out "test.s" in
   fprintf oc "%s" compiled;
   close_out oc
+
+
+let compile_str_to_file prog_string =
+  let prog_stream = Qbe_lexer.stream_of_string prog_string in
+  let outfile = "test.s" in
+  let oc = open_out outfile in
+  compile_to_file prog_stream oc
+
 
 (*
 
