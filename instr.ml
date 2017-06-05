@@ -83,8 +83,9 @@ let is_instruction_op = function
   | "stosi"
   | "swtof"
   | "truncd"
-  (* Cast *)
+  (* Cast and copy *)
   | "cast"
+  | "copy"
   (* Call *)
   | "call"
   (* Phi *)
