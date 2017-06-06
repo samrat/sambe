@@ -24,6 +24,13 @@ type reg =
 type bytereg =
   | AL
 
+type freg =
+  | ST0 | ST1 | ST2 | ST3
+  | ST4 | ST5 | ST6 | ST7
+
+type ssereg =
+  | Xmm0
+
 type size =
   | QWORD_PTR
   | DWORD_PTR
@@ -31,11 +38,15 @@ type size =
   | BYTE_PTR
 
 type arg =
-  | Const of int
+  | Integer of int
+  | Float of float
   | HexConst of int
   | Reg of reg
   | ByteReg of bytereg
+  | FReg of freg
+  | SSEReg of ssereg
   | RegOffset of int * reg
+  | VarOffset of int * arg
   | Sized of size * arg
   (* pseudo-arg for before reg. allocation *)
   | Var of string
@@ -48,6 +59,7 @@ type instruction =
   | IMov of arg * arg
   | IMovZx of arg * arg
   | IMovSx of arg * arg
+  | IMovSd of arg * arg
   | IAdd of arg * arg
   | ISub of arg * arg
   | IMul of arg * arg
@@ -72,6 +84,12 @@ type instruction =
 
   | ILabel of string
 
+  | IFld of arg
+  | IFst of arg
+  | IFadd of arg * arg
+  | IFsub of arg * arg
+  | IFmul of arg * arg
+
 
 let arg_reg_order = List.map (fun r -> Reg(r))
     [RDI; RSI; RDX; RCX; R8; R9]
@@ -87,11 +105,13 @@ let get_ident_name = function
   | GlobalIdent(id) | FuncIdent(id) -> id
   | _ -> failwith "NYI"
 
-let get_arg_val = function
+let get_arg_val arg = match arg with
   | GlobalIdent(id) -> Var(id)
   | FuncIdent(id) -> Var(id)
-  | Integer(i) -> Const(i)
-  | _ -> failwith "NYI: get_arg_val"
+  | Integer(i) -> Integer(i)
+  | Float(f) -> Float(f)
+  | Double(f) -> Float(f)
+  | _ -> failwith (sprintf "NYI: get_arg_val %s" (ExtLib.dump arg))
 
 let get_label = function
   | BlockLabel(label) -> label
@@ -104,10 +124,14 @@ let lookup x env =
   in
   lookup' env
 
-let rec instr_to_x86 instr =
+let arith_instr_to_x86 op arg1 arg2 instr_ty =
+  failwith "NYI"
+
+
+let rec instr_to_x86 instr instr_ty =
   match instr with
   | Assign(dest, typ, src_instr) ->
-    instr_to_x86 src_instr @
+    instr_to_x86 src_instr (Some(typ)) @
     [ IMov(get_arg_val dest, Reg(RAX)) ]
   | Instr1(op, arg) ->
     begin
@@ -126,10 +150,10 @@ let rec instr_to_x86 instr =
          accordingly. *)
       | "alloc4" | "alloc8" | "alloc16" ->
         let num_bytes = (match get_arg_val arg with
-            | Const(i) -> i
+            | Integer(i) -> i
             | _ -> failwith "expected constant") in
         let padding = num_bytes mod 16 in
-        [ ISub(Reg(RSP), Const(num_bytes + padding));
+        [ ISub(Reg(RSP), Integer(num_bytes + padding));
           IMov(Reg(RAX), Reg(RSP)) ]
 
       (* Load *)
@@ -149,17 +173,33 @@ let rec instr_to_x86 instr =
     end
   | Instr2(op, arg1, arg2) ->
     begin
-      match op with
-      (* Arithmetic/logic *)
-      (* TODO: perform only the necessary instruction here. Add
-         another pass to move to the "scratch" register. *)
-      | "add" ->
+    match op with
+    (* Arithmetic/logic *)
+    (* TODO: perform only the necessary instruction here. Add
+       another pass to move to the "scratch" register. *)
+    | "add" ->
+      begin
+      match instr_ty with
+      | Some(BaseTy(W)) | Some(BaseTy(L)) ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           IAdd(Reg(RAX), get_arg_val arg2); ]
-      | "sub" ->
-        [ IMov(Reg(RAX), get_arg_val arg1);
-          ISub(Reg(RAX), get_arg_val arg2) ]
-      | "mul" ->
+      | Some(BaseTy(D)) | Some(BaseTy(S)) ->
+        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+          IFadd(FReg(ST0), FReg(ST1));
+          (* TODO: This `ret` shouldn't be a static string. (Will one
+             address in the data segment be enough?). Is there a
+             better way than to reserve space in the data/bss
+             segment? *)
+          IFst(Sized(QWORD_PTR, VarOffset(0, Var("ret"))));
+          IMovSd(SSEReg(Xmm0), VarOffset(0, Var("ret")));
+        ]
+      | _ -> failwith "NYI"
+      end
+    | "sub" ->
+      [ IMov(Reg(RAX), get_arg_val arg1);
+        ISub(Reg(RAX), get_arg_val arg2) ]
+    | "mul" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           IMul(Reg(RAX), get_arg_val arg2); ]
       (* TODO: move arg2 to register *)
@@ -194,7 +234,7 @@ let rec instr_to_x86 instr =
       | "shl" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           IShl(Reg(RAX), get_arg_val arg2) ]
-        
+
       (* TODO: There is a lot of repetetive code for the compare
          instructions below. It should be simple to factor out all
          common code. *)
@@ -303,7 +343,7 @@ let rec instr_to_x86 instr =
       match op with
       | "jnz" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
-          ICmp(Reg(RAX), Const(0));
+          ICmp(Reg(RAX), Integer(0));
           IJne(get_label arg2);
           (* TODO: Can we avoid this jump by generating code for the
              `arg3` block here? *)
@@ -324,12 +364,13 @@ let rec instr_to_x86 instr =
     (List.map (fun r -> IPop(r)) (List.rev caller_save_regs))
   | _ -> failwith "NYI: instr_to_x86"
 
+
 let block_to_x86 block =
   match block with
   | Block(label, [], reg_instrs, last_instr) ->
     [ ILabel(get_label label) ] @
-    List.flatten (List.map instr_to_x86 reg_instrs) @
-    (instr_to_x86 last_instr)
+    List.flatten (List.map (fun i -> instr_to_x86 i None) reg_instrs) @
+    (instr_to_x86 last_instr None)
   | Block(_, phis, _, _) -> failwith "expected empty phi instr list"
   | _ -> failwith "NYI"
 
@@ -398,6 +439,22 @@ let r_to_asm (r : reg) : string =
   | R14 -> "r14"
   | R15 -> "r15"
 
+let fr_to_asm (fr : freg) : string =
+  match fr with
+  | ST0 -> "st0"
+  | ST1 -> "st1"
+  | ST2 -> "st2"
+  | ST3 -> "st3"
+  | ST4 -> "st4"
+  | ST5 -> "st5"
+  | ST6 -> "st6"
+  | ST7 -> "st7"
+
+let sr_to_asm (sr : ssereg) : string =
+  match sr with
+  | Xmm0 -> "xmm0"
+
+
 let br_to_asm = function
   | AL -> "al"
 
@@ -410,10 +467,20 @@ let s_to_asm (s : size) : string =
 
 let rec arg_to_asm (a : arg) : string =
   match a with
-  | Const(n) -> sprintf "%d" n
+  | Integer(n) -> sprintf "%d" n
+  (* TODO: floats get hoisted up to data segment. So, this should be
+     removed *)
+  | Float(n) -> sprintf "%f" n
   | HexConst(n) -> sprintf "0x%X" n
   | Reg(r) -> r_to_asm r
+  | FReg(fr) -> fr_to_asm fr
+  | SSEReg(sr) -> sr_to_asm sr
   | ByteReg(br) -> br_to_asm br
+  | VarOffset(n, v) ->
+    if n >= 0 then
+      sprintf "[%s+%d]" (arg_to_asm v) n
+    else
+      sprintf "[%s-%d]" (arg_to_asm v) (-1 * n)
   | RegOffset(n, r) ->
     if n >= 0 then
       sprintf "[%s+%d]" (r_to_asm r) n
@@ -444,6 +511,8 @@ let i_to_asm (i : instruction) : string =
       sprintf "  movzx %s, %s" (arg_to_asm dest) (arg_to_asm src)
     | IMovSx(dest, src) ->
       sprintf "  movsx %s, %s" (arg_to_asm dest) (arg_to_asm src)
+    | IMovSd(dest, src) ->
+      sprintf "  movsd %s, %s" (arg_to_asm dest) (arg_to_asm src)
     | IAdd(dest, to_add) ->
       sprintf "  add %s, %s" (arg_to_asm dest) (arg_to_asm to_add)
     | ISub(dest, to_sub) ->
@@ -479,6 +548,17 @@ let i_to_asm (i : instruction) : string =
       sprintf "  push %s" (arg_to_asm arg)
     | IPop(arg) ->
       sprintf "  pop %s" (arg_to_asm arg)
+    | IFld(arg) ->
+      sprintf "  fld %s" (arg_to_asm arg)
+    | IFst(arg) ->
+      sprintf "  fst %s" (arg_to_asm arg)
+    | IFadd(left, right) ->
+      sprintf "  fadd %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | IFsub(left, right) ->
+      sprintf "  fsub %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | IFmul(left, right) ->
+      sprintf "  fmul %s, %s" (arg_to_asm left) (arg_to_asm right)
+
     | IRet ->
       let restore_callee_save_regs = (List.fold_left (fun acc r ->
           let r = match r with
@@ -548,17 +628,21 @@ let asm_of_func (func: qbe) (data_def_names: string list)  : string =
 let asm_of_data = function
   | DataDef(export, name, fields) ->
     (* "ret: dq 0" *)
-    let get_int_val = function
-      | Integer(i) -> i
-      | _ -> failwith "expected Integer"
+    let get_val_str (v : qbe) = match v with
+      | Integer(i) -> (sprintf "%d, " i)
+      | Float(f) -> (sprintf "%f, " f)
+      | Double(f) -> (sprintf "%f, " f)
+      | _ -> failwith (sprintf "expected Integer, but got %s" (ExtLib.dump v))
     in
     let get_size_char = function
       | ExtTy(B) -> "b"
       | BaseTy(W) -> "w"        (* 32-bit *)
       | BaseTy(L) -> "q"        (* 64-bit *)
+      | BaseTy(D) -> "q"
+      | BaseTy(S) -> "w"
       | _ -> failwith "NYI" in
     let field_vals_str (typ, vs) = List.fold_left 
-        (fun acc x -> acc ^ (Printf.sprintf "%d, " (get_int_val x))) 
+        (fun acc x -> acc ^ (get_val_str x))
         (sprintf "d%s " (get_size_char typ))
         vs in
     let s = List.fold_left
