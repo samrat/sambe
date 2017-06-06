@@ -90,7 +90,7 @@ type instruction =
   | IFsub of arg * arg
   | IFmul of arg * arg
   | IFdiv of arg * arg
-
+  | IFcomip of arg * arg
 
 let arg_reg_order = List.map (fun r -> Reg(r))
     [RDI; RSI; RDX; RCX; R8; R9]
@@ -281,6 +281,18 @@ let rec instr_to_x86 instr instr_ty =
           IMovZx(Reg(RAX), ByteReg(AL)) ]
       | "ceql" ->
         [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
+          ISet(E, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "ceqs" ->
+        [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+          IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+          IFcomip(FReg(ST0), FReg(ST1));
+          ISet(E, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "ceqd" ->
+        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+          IFcomip(FReg(ST0), FReg(ST1));
           ISet(E, ByteReg(AL));
           IMovZx(Reg(RAX), ByteReg(AL))]
 
@@ -597,7 +609,8 @@ let i_to_asm (i : instruction) : string =
       sprintf "  fmul %s, %s" (arg_to_asm left) (arg_to_asm right)
     | IFdiv(left, right) ->
       sprintf "  fdiv %s, %s" (arg_to_asm left) (arg_to_asm right)
-
+    | IFcomip(left, right) ->
+      sprintf "  fcomip %s, %s" (arg_to_asm left) (arg_to_asm right)
     | IRet ->
       let restore_callee_save_regs = (List.fold_left (fun acc r ->
           let r = match r with
