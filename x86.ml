@@ -173,79 +173,79 @@ let rec instr_to_x86 instr instr_ty =
     end
   | Instr2(op, arg1, arg2) ->
     begin
-    match op with
-    (* Arithmetic/logic *)
-    (* TODO: perform only the necessary instruction here. Add
-       another pass to move to the "scratch" register. *)
-    | "add" ->
-      begin
-      match instr_ty with
-      | Some(BaseTy(W)) | Some(BaseTy(L)) ->
-        [ IMov(Reg(RAX), get_arg_val arg1);
-          IAdd(Reg(RAX), get_arg_val arg2); ]
-      | Some(BaseTy(D)) | Some(BaseTy(S)) ->
-        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFadd(FReg(ST0), FReg(ST1));
-          (* TODO: This `ret` shouldn't be a static string. (Will one
-             address in the data segment be enough?). Is there a
-             better way than to reserve space in the data/bss
-             segment? *)
-          IFst(Sized(QWORD_PTR, VarOffset(0, Var("ret"))));
-          IMovSd(SSEReg(Xmm0), VarOffset(0, Var("ret")));
-        ]
-      | _ -> failwith "NYI"
-      end
-    | "sub" ->
-      begin
-      match instr_ty with
-      | Some(BaseTy(W)) | Some(BaseTy(L)) ->
-        [ IMov(Reg(RAX), get_arg_val arg1);
-          ISub(Reg(RAX), get_arg_val arg2); ]
-      | Some(BaseTy(D)) | Some(BaseTy(S)) ->
-        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFsub(FReg(ST0), FReg(ST1));
-          (* TODO: This `ret` shouldn't be a static string. (Will one
-             address in the data segment be enough?). Is there a
-             better way than to reserve space in the data/bss
-             segment? *)
-          IFst(Sized(QWORD_PTR, VarOffset(0, Var("ret"))));
-          IMovSd(SSEReg(Xmm0), VarOffset(0, Var("ret")));
-        ]
-      | _ -> failwith "NYI"
-      end
-    | "mul" ->
-      begin
-      match instr_ty with
-      | Some(BaseTy(W)) | Some(BaseTy(L)) ->
-        [ IMov(Reg(RAX), get_arg_val arg1);
-          IMul(Reg(RAX), get_arg_val arg2); ]
-      | Some(BaseTy(D)) | Some(BaseTy(S)) ->
-        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFmul(FReg(ST0), FReg(ST1));
-          (* TODO: This `ret` shouldn't be a static string. (Will one
-             address in the data segment be enough?). Is there a
-             better way than to reserve space in the data/bss
-             segment? *)
-          IFst(Sized(QWORD_PTR, VarOffset(0, Var("ret"))));
-          IMovSd(SSEReg(Xmm0), VarOffset(0, Var("ret")));
-        ]
-      | _ -> failwith "NYI"
-      end
+      match op with
+      (* Arithmetic/logic *)
+      (* TODO: perform only the necessary instruction here. Add
+         another pass to move to the "scratch" register. *)
+      | "add" ->
+        begin
+          match instr_ty with
+          | Some(BaseTy(W)) | Some(BaseTy(L)) ->
+            [ IMov(Reg(RAX), get_arg_val arg1);
+              IAdd(Reg(RAX), get_arg_val arg2); ]
+          | Some(BaseTy(D)) | Some(BaseTy(S)) ->
+            [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+              IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+              IFadd(FReg(ST0), FReg(ST1));
+              (* TODO: This `ret` shouldn't be a static string. (Will one
+                 address in the data segment be enough?). Is there a
+                 better way than to reserve space in the data/bss
+                 segment? *)
+              IFst(Sized(QWORD_PTR, VarOffset(0, Var("ret"))));
+              IMovSd(SSEReg(Xmm0), VarOffset(0, Var("ret")));
+            ]
+          | _ -> failwith "NYI"
+        end
+      | "sub" ->
+        begin
+          match instr_ty with
+          | Some(BaseTy(W)) | Some(BaseTy(L)) ->
+            [ IMov(Reg(RAX), get_arg_val arg1);
+              ISub(Reg(RAX), get_arg_val arg2); ]
+          | Some(BaseTy(D)) | Some(BaseTy(S)) ->
+            [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+              IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+              IFsub(FReg(ST0), FReg(ST1));
+              (* TODO: This `ret` shouldn't be a static string. (Will one
+                 address in the data segment be enough?). Is there a
+                 better way than to reserve space in the data/bss
+                 segment? *)
+              IFst(Sized(QWORD_PTR, VarOffset(0, Var("ret"))));
+              IMovSd(SSEReg(Xmm0), VarOffset(0, Var("ret")));
+            ]
+          | _ -> failwith "NYI"
+        end
+      | "mul" ->
+        begin
+          match instr_ty with
+          | Some(BaseTy(W)) | Some(BaseTy(L)) ->
+            [ IMov(Reg(RAX), get_arg_val arg1);
+              IMul(Reg(RAX), get_arg_val arg2); ]
+          | Some(BaseTy(D)) | Some(BaseTy(S)) ->
+            [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+              IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+              IFmul(FReg(ST0), FReg(ST1));
+              (* TODO: This `ret` shouldn't be a static string. (Will one
+                 address in the data segment be enough?). Is there a
+                 better way than to reserve space in the data/bss
+                 segment? *)
+              IFst(Sized(QWORD_PTR, VarOffset(0, Var("ret"))));
+              IMovSd(SSEReg(Xmm0), VarOffset(0, Var("ret")));
+            ]
+          | _ -> failwith "NYI"
+        end
       (* TODO: move arg2 to register *)
-    | "div" ->
-      [ IMov(Reg(RAX), get_arg_val arg1);
-        IMov(Reg(RBX), get_arg_val arg2);
-        ICdq;
-        ISDiv(Reg(RBX)); ]
-    | "rem" ->
-      [ IMov(Reg(RAX), get_arg_val arg1);
-        IMov(Reg(RBX), get_arg_val arg2);
-        ICdq;
-        ISDiv(Reg(RBX));
-        IMov(Reg(RAX), Reg(RDX));]
+      | "div" ->
+        [ IMov(Reg(RAX), get_arg_val arg1);
+          IMov(Reg(RBX), get_arg_val arg2);
+          ICdq;
+          ISDiv(Reg(RBX)); ]
+      | "rem" ->
+        [ IMov(Reg(RAX), get_arg_val arg1);
+          IMov(Reg(RBX), get_arg_val arg2);
+          ICdq;
+          ISDiv(Reg(RBX));
+          IMov(Reg(RAX), Reg(RDX));]
       | "udiv" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           IMov(Reg(RBX), get_arg_val arg2);
@@ -388,7 +388,7 @@ let rec instr_to_x86 instr instr_ty =
     (List.map (fun r -> IPush(r)) caller_save_regs) @
     (* TODO: handle more than 6 args *)
     (List.map2 (fun (ty, arg) reg ->
-        IMov(reg, get_arg_val arg))
+         IMov(reg, get_arg_val arg))
         (List.take 6 (List.rev args))
         (List.take (min 6 (List.length args)) arg_reg_order)) @
     [ ICall(fn) ] @
