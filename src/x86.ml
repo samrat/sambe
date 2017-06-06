@@ -304,6 +304,18 @@ let rec instr_to_x86 instr instr_ty =
         [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
           ISet(NE, ByteReg(AL));
           IMovZx(Reg(RAX), ByteReg(AL))]
+      | "cnes" ->
+        [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+          IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+          IFcomip(FReg(ST0), FReg(ST1));
+          ISet(NE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "cned" ->
+        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+          IFcomip(FReg(ST0), FReg(ST1));
+          ISet(NE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
 
       | "cslew" ->
         [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
@@ -312,6 +324,18 @@ let rec instr_to_x86 instr instr_ty =
       | "cslel" ->
         [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
           ISet(LE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "cles" ->
+        [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+          IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+          IFcomip(FReg(ST0), FReg(ST1));
+          ISet(BE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "cled" ->
+        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+          IFcomip(FReg(ST0), FReg(ST1));
+          ISet(BE, ByteReg(AL));
           IMovZx(Reg(RAX), ByteReg(AL))]
 
       | "csltw" ->
@@ -322,6 +346,18 @@ let rec instr_to_x86 instr instr_ty =
         [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
           ISet(LT, ByteReg(AL));
           IMovZx(Reg(RAX), ByteReg(AL))]
+      | "clts" ->
+        [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+          IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+          IFcomip(FReg(ST0), FReg(ST1));
+          ISet(B, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
+      | "cltd" ->
+        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+          IFcomip(FReg(ST0), FReg(ST1));
+          ISet(B, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL))]
 
       | "csgew" ->
         [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
@@ -331,6 +367,18 @@ let rec instr_to_x86 instr instr_ty =
         [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
           ISet(GE, ByteReg(AL));
           IMovZx(Reg(RAX), ByteReg(AL))]
+      | "cges" ->
+        [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+          IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+          IFcomip(FReg(ST0), FReg(ST1));
+          ISet(AE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL)) ]
+      | "cged" ->
+        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+          IFcomip(FReg(ST0), FReg(ST1));
+          ISet(AE, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL)) ]
 
       | "csgtw" ->
         [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
@@ -340,6 +388,18 @@ let rec instr_to_x86 instr instr_ty =
         [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
           ISet(GT, ByteReg(AL));
           IMovZx(Reg(RAX), ByteReg(AL))]
+      | "cgts" ->
+        [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+          IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+          IFcomip(FReg(ST0), FReg(ST1));
+          ISet(A, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL)) ]
+      | "cgtd" ->
+        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+          IFcomip(FReg(ST0), FReg(ST1));
+          ISet(A, ByteReg(AL));
+          IMovZx(Reg(RAX), ByteReg(AL)) ]
 
       | "culew" ->
         [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
