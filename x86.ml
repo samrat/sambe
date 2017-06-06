@@ -89,6 +89,7 @@ type instruction =
   | IFadd of arg * arg
   | IFsub of arg * arg
   | IFmul of arg * arg
+  | IFdiv of arg * arg
 
 
 let arg_reg_order = List.map (fun r -> Reg(r))
@@ -221,21 +222,29 @@ let rec instr_to_x86 instr instr_ty =
             [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
               IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
               IFmul(FReg(ST0), FReg(ST1));
-              (* TODO: This `ret` shouldn't be a static string. (Will one
-                 address in the data segment be enough?). Is there a
-                 better way than to reserve space in the data/bss
-                 segment? *)
               IFst(Sized(QWORD_PTR, VarOffset(0, Var("ret"))));
               IMovSd(SSEReg(Xmm0), VarOffset(0, Var("ret")));
             ]
           | _ -> failwith "NYI"
         end
-      (* TODO: move arg2 to register *)
       | "div" ->
-        [ IMov(Reg(RAX), get_arg_val arg1);
-          IMov(Reg(RBX), get_arg_val arg2);
-          ICdq;
-          ISDiv(Reg(RBX)); ]
+        begin
+          match instr_ty with
+          | Some(BaseTy(W)) | Some(BaseTy(L)) ->
+            [ IMov(Reg(RAX), get_arg_val arg1);
+              IMov(Reg(RBX), get_arg_val arg2);
+              ICdq;
+              ISDiv(Reg(RBX)); ]
+          | Some(BaseTy(D)) | Some(BaseTy(S)) ->
+            [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+              IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+              IFdiv(FReg(ST0), FReg(ST1));
+              IFst(Sized(QWORD_PTR, VarOffset(0, Var("ret"))));
+              IMovSd(SSEReg(Xmm0), VarOffset(0, Var("ret")));
+            ]
+          | _ -> failwith "NYI"
+        end
+
       | "rem" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           IMov(Reg(RBX), get_arg_val arg2);
@@ -586,6 +595,8 @@ let i_to_asm (i : instruction) : string =
       sprintf "  fsub %s, %s" (arg_to_asm left) (arg_to_asm right)
     | IFmul(left, right) ->
       sprintf "  fmul %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | IFdiv(left, right) ->
+      sprintf "  fdiv %s, %s" (arg_to_asm left) (arg_to_asm right)
 
     | IRet ->
       let restore_callee_save_regs = (List.fold_left (fun acc r ->
