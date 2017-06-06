@@ -124,10 +124,6 @@ let lookup x env =
   in
   lookup' env
 
-let arith_instr_to_x86 op arg1 arg2 instr_ty =
-  failwith "NYI"
-
-
 let rec instr_to_x86 instr instr_ty =
   match instr with
   | Assign(dest, typ, src_instr) ->
