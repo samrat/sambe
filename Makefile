@@ -1,18 +1,18 @@
 OC := ocamlbuild -classic-display -no-links -use-ocamlfind
 
 sambe:
-	ocamlbuild -tag 'debug' -r -use-ocamlfind -package extlib sambe.native
+	ocamlbuild -tag 'debug' -r -use-ocamlfind -package extlib -I src/ sambe.native
 
 test_suite:
-	ocamlbuild -tag 'debug' -r -use-ocamlfind -package oUnit,extlib -Is tests/ test.native
+	ocamlbuild -tag 'debug' -r -use-ocamlfind -package oUnit,extlib -I tests/ test.native
 	./test.native
 
-build: myutop.mltop
+build: src/myutop.mltop
 	rm -f myutop.top
 	ocamlbuild -clean
-	$(OC) -tag thread -pkg threads,utop,extlib myutop.top
+	$(OC) -tag thread -pkg threads,utop,extlib -I src/ myutop.top
 
-	mv _build/myutop.top .
+	mv _build/src/myutop.top .
 	chmod +x myutop.top
 
 test: test.s
