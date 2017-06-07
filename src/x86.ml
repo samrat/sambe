@@ -125,6 +125,24 @@ let lookup x env =
   in
   lookup' env
 
+let rec cmp_instr_to_x86 size cmp (arg1, arg2) =
+  let cmp_part = match size with
+    (* FIX: For DWORD, this emits RDI, but it should be EDI *)
+
+    | W -> [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);]
+    | L -> [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);]
+    | S -> [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+             IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+             IFcomip(FReg(ST0), FReg(ST1)); ]
+    | D -> [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
+             IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
+             IFcomip(FReg(ST0), FReg(ST1)); ]
+    | _ -> failwith "expected integer or float type"
+  in
+  let set_result = [ ISet(cmp, ByteReg(AL));
+                     IMovZx(Reg(RAX), ByteReg(AL)) ] in
+  cmp_part @ set_result
+
 let rec instr_to_x86 instr instr_ty =
   match instr with
   | Assign(dest, typ, src_instr) ->
@@ -272,170 +290,79 @@ let rec instr_to_x86 instr instr_ty =
         [ IMov(Reg(RAX), get_arg_val arg1);
           IShl(Reg(RAX), get_arg_val arg2) ]
 
-      (* TODO: There is a lot of repetetive code for the compare
-         instructions below. It should be simple to factor out all
-         common code. *)
       | "ceqw" ->
-        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(E, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL)) ]
+        cmp_instr_to_x86 W E (arg1, arg2)
       | "ceql" ->
-        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(E, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 L E (arg1, arg2)
       | "ceqs" ->
-        [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFcomip(FReg(ST0), FReg(ST1));
-          ISet(E, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 S E (arg1, arg2)
       | "ceqd" ->
-        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFcomip(FReg(ST0), FReg(ST1));
-          ISet(E, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 D E (arg1, arg2)
 
       | "cnew" ->
-        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(NE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 W NE (arg1, arg2)
       | "cnel" ->
-        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(NE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 L NE (arg1, arg2)
       | "cnes" ->
-        [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFcomip(FReg(ST0), FReg(ST1));
-          ISet(NE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 S NE (arg1, arg2)
       | "cned" ->
-        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFcomip(FReg(ST0), FReg(ST1));
-          ISet(NE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 D NE (arg1, arg2)
 
       | "cslew" ->
-        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(LE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 W LE (arg1, arg2)
       | "cslel" ->
-        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(LE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 L LE (arg1, arg2)
       | "cles" ->
-        [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFcomip(FReg(ST0), FReg(ST1));
-          ISet(BE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 S BE (arg1, arg2)
       | "cled" ->
-        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFcomip(FReg(ST0), FReg(ST1));
-          ISet(BE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 D BE (arg1, arg2)
 
       | "csltw" ->
-        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(LT, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 W LT (arg1, arg2)
       | "csltl" ->
-        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(LT, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 L LT (arg1, arg2)
       | "clts" ->
-        [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFcomip(FReg(ST0), FReg(ST1));
-          ISet(B, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 S B (arg1, arg2)
       | "cltd" ->
-        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFcomip(FReg(ST0), FReg(ST1));
-          ISet(B, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 D B (arg1, arg2)
 
       | "csgew" ->
-        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(GE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 W GE (arg1, arg2)
       | "csgel" ->
-        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(GE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 L GE (arg1, arg2)
       | "cges" ->
-        [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFcomip(FReg(ST0), FReg(ST1));
-          ISet(AE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL)) ]
+        cmp_instr_to_x86 S AE (arg1, arg2)
       | "cged" ->
-        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFcomip(FReg(ST0), FReg(ST1));
-          ISet(AE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL)) ]
+        cmp_instr_to_x86 D AE (arg1, arg2)
 
       | "csgtw" ->
-        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(GT, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 W GT (arg1, arg2)
       | "csgtl" ->
-        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(GT, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 L GT (arg1, arg2)
       | "cgts" ->
-        [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFcomip(FReg(ST0), FReg(ST1));
-          ISet(A, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL)) ]
+        cmp_instr_to_x86 S A (arg1, arg2)
       | "cgtd" ->
-        [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-          IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-          IFcomip(FReg(ST0), FReg(ST1));
-          ISet(A, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL)) ]
+        cmp_instr_to_x86 D A (arg1, arg2)
 
       | "culew" ->
-        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(BE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 W BE (arg1, arg2)
       | "culel" ->
-        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(BE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 L BE (arg1, arg2)
 
       | "cultw" ->
-        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(B, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 W B (arg1, arg2)
       | "cultl" ->
-        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(B, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 L BE (arg1, arg2)
 
       | "cugew" ->
-        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(AE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 W AE (arg1, arg2)
       | "cugel" ->
-        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(AE, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
-
+        cmp_instr_to_x86 L AE (arg1, arg2)
+        
       | "cugtw" ->
-        [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(A, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 W A (arg1, arg2)
       | "cugtl" ->
-        [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);
-          ISet(A, ByteReg(AL));
-          IMovZx(Reg(RAX), ByteReg(AL))]
+        cmp_instr_to_x86 L A (arg1, arg2)
 
       (* Store *)
       | "storew" ->
@@ -502,17 +429,23 @@ let assign_homes (block: instruction list) (mappings : (string, arg) Hashtbl.t)=
     let dest_loc = find_loc dest in
     let src_loc = find_loc src in
     (dest_loc, src_loc)
+  | (Sized(size, Var(dest)), Var(src)) ->
+    let dest_loc = find_loc dest in
+    let src_loc = find_loc src in
+    (Sized(size, dest_loc), src_loc)
+    
   | Var(dest), src ->
     let dest_loc = find_loc dest in
     (dest_loc, src)
   | dest, Var(src) ->
     let src_loc = find_loc src in
     (dest, src_loc)
-  | Sized(size, Var(dest)), src ->
+    
+  | (Sized(size, Var(dest)), src) ->
     let dest_loc = find_loc dest in
     (Sized(size, dest_loc), src)
-  | dest, src ->
-    (dest, src)
+    
+  | (dest, src) -> (dest, src)
   in
   let fixup_instr = function
     | IMov(d, s) ->
@@ -521,9 +454,10 @@ let assign_homes (block: instruction list) (mappings : (string, arg) Hashtbl.t)=
     | IAdd(d, s) ->
       let (new_dest, new_src) = replace_instr2_args_with_locs (d, s) in
       IAdd(new_dest, new_src)
-    | ICmp(d, s) ->
-      let (new_dest, new_src) = replace_instr2_args_with_locs (d, s) in
-      ICmp(new_dest, new_src)
+    | ICmp(left, right) ->
+      let (new_left, new_right) = replace_instr2_args_with_locs (left, right) in
+      print_endline (ExtLib.dump (new_left, new_right));
+      ICmp(new_left, new_right)
     | instr -> instr
   in
   (!counter - 1, List.map fixup_instr block)
