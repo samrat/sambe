@@ -1,0 +1,19 @@
+(* Added by OPAM. *)
+let () =
+  try Topdirs.dir_directory (Sys.getenv "OCAML_TOPLEVEL_PATH")
+  with Not_found -> ()
+;;
+
+#use "topfind";;
+#thread;;
+#camlp4o;;
+
+#require "extlib";;
+#directory "_build/src";;
+
+#load "instr.cmo";;
+#load "util.cmo";;
+#load "qbe_lexer.cmo";;
+#load "qbe_parser.cmo";;
+#load "cfg.cmo";;
+#load "x86.cmo";;
