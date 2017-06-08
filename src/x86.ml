@@ -364,6 +364,11 @@ let rec instr_to_x86 instr instr_ty =
       | "cugtl" ->
         cmp_instr_to_x86 L A (arg1, arg2)
 
+      | "cod" -> failwith "NYI: cod"
+      | "cos" -> failwith "NYI: cos"
+      | "cuod" -> failwith "NYI: cuod"
+      | "cuos" -> failwith "NYI: cuos"
+
       (* Store *)
       | "storew" ->
         let v = get_arg_val arg1 in
