@@ -476,7 +476,6 @@ let assign_homes (block: instruction list) (mappings : (string, arg) Hashtbl.t)=
       IAdd(new_dest, new_src)
     | ICmp(left, right) ->
       let (new_left, new_right) = replace_instr2_args_with_locs (left, right) in
-      print_endline (ExtLib.dump (new_left, new_right));
       ICmp(new_left, new_right)
     | instr -> instr
   in
