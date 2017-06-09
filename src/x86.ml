@@ -12,6 +12,9 @@ type dwordreg =                 (* 32-bit registers *)
   | EDI
   | ESI
 
+type bytereg =
+  | AL
+
 type reg =
   | RAX
   | RBX
@@ -32,8 +35,6 @@ type reg =
   | R15
   | DWordReg of dwordreg
 
-type bytereg =
-  | AL
 
 type freg =
   | ST0 | ST1 | ST2 | ST3
@@ -539,8 +540,8 @@ let s_to_asm (s : size) : string =
   | BYTE_PTR -> "BYTE"
 
 let reg_size_fix (s: size) (a : arg) =
-  match a with
-  | Reg(r) -> begin
+  match (s, a) with
+  | DWORD_PTR, Reg(r) -> begin
       match r with
       | RAX -> Reg(DWordReg(EAX))
       | RBX -> Reg(DWordReg(EBX))
@@ -564,9 +565,9 @@ let rec arg_to_asm (a : arg) : string =
   | Float(n) -> sprintf "%f" n
   | HexConst(n) -> sprintf "0x%X" n
   | Reg(r) -> r_to_asm r
+  | ByteReg(br) -> br_to_asm br
   | FReg(fr) -> fr_to_asm fr
   | SSEReg(sr) -> sr_to_asm sr
-  | ByteReg(br) -> br_to_asm br
   | VarOffset(n, v) ->
     if n >= 0 then
       sprintf "[%s+%d]" (arg_to_asm v) n
