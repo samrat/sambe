@@ -1,5 +1,5 @@
 type token = Ident of string
-           | Integer of int
+           | Integer of Int64.t
            | Float of float     (* TODO: f32 and f64 *)
            | Double of float
            | Keyword of string

@@ -39,7 +39,7 @@ type instr = Assign of qbe * ty * instr (* dest * type * instr *)
 and qbe =
   | String of string
   (* const *)
-  | Integer of int
+  | Integer of Int64.t
   (* TODO: handle different sizes *)
   | Float of float
   | Double of float
@@ -371,7 +371,7 @@ let parse_typedef ls =
         let item = (get_type (Some(Ident(ty)))) in
         ignore (next_token ls);
         let num = (match peek_token ls with
-            | Some(Integer(n)) -> ignore (next_token ls); n
+            | Some(Integer(n)) -> ignore (next_token ls); Int64.to_int n
             | _ -> 1) in
         let newitems = ((item, num) :: acc) in
         if peek_token ls = Some(Comma)
@@ -392,7 +392,7 @@ let parse_typedef ls =
         | Some(Keyword("align")) ->
           ignore (next_token ls);
           (match (next_token ls) with
-           | Some(Integer(i)) -> Some(i)
+           | Some(Integer(i)) -> Some(Int64.to_int i)
            | _ -> failwith "expected integer")
         | _ -> None) in
     (expect ls LBrace);

@@ -2,7 +2,7 @@ open Util
 open Instr
 
 type token = Ident of string
-           | Integer of int
+           | Integer of Int64.t
            | Float of float     (* TODO: f32 and f64 *)
            | Double of float
            | Keyword of string
@@ -84,13 +84,13 @@ let read_keyword ls =
   | _ -> failwith "expected ident"
 
 let read_int ls neg =
-  let rec read_int' acc =
+  let rec read_int' (acc : Int64.t) : Int64.t =
     match peek_char ls with
     | Some c ->
       if is_digit c
       then
         let _ = read_char ls in
-        read_int' (acc*10 + (Char.code c - Char.code '0'))
+        read_int' Int64.(add (mul acc (of_int 10)) (of_int ((Char.code c) - (Char.code '0'))))
       else
         acc
     | None -> acc
@@ -98,9 +98,9 @@ let read_int ls neg =
   if neg
   then begin
     ignore (read_char ls);
-    Integer(-1 * (read_int' 0))
+    Integer(Int64.(mul (of_int (-1)) (read_int' zero)))
   end
-  else Integer(read_int' 0)
+  else Integer(read_int' (Int64.zero))
 
 let rec skip_whitespace ls =
   match peek_char ls with

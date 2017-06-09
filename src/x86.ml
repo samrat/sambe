@@ -48,7 +48,7 @@ type size =
   | BYTE_PTR
 
 type arg =
-  | Integer of int
+  | Integer of Int64.t
   | Float of float
   | HexConst of int
   | Reg of reg
@@ -155,19 +155,24 @@ let rec cmp_instr_to_x86 size cmp (arg1, arg2) =
   cmp_part @ set_result
 
 let rec instr_to_x86 instr instr_ty =
+  let size = match instr_ty with
+    | Some(BaseTy(W)) | Some(BaseTy(S)) -> DWORD_PTR
+    | Some(BaseTy(L)) | Some(BaseTy(D)) -> QWORD_PTR
+    | None -> QWORD_PTR
+    | _ -> failwith (sprintf "NYI: instr_to_x86 size %s" (ExtLib.dump instr_ty)) in
   match instr with
   | Assign(dest, typ, src_instr) ->
     instr_to_x86 src_instr (Some(typ)) @
-    [ IMov(get_arg_val dest, Reg(RAX)) ]
+    [ IMov(Sized(size, get_arg_val dest), Sized(size, Reg(RAX))) ]
   | Instr1(op, arg) ->
     begin
       match op with
-      | "copy" -> 
-        [ IMov(Reg(RAX), get_arg_val arg) ]
+      | "copy" ->
+        [ IMov(Sized(size, Reg(RAX)), get_arg_val arg) ]
       | "jmp" ->
         [ IJmp(get_label arg) ]
       | "ret" ->
-        [ IMov(Reg(RAX), get_arg_val arg);
+        [ IMov(Sized(size, Reg(RAX)), get_arg_val arg);
           IRet ]
       (* Allocate *)
       (* NOTE: TODO: when there are multiple alloc's in a block, this
@@ -178,8 +183,8 @@ let rec instr_to_x86 instr instr_ty =
         let num_bytes = (match get_arg_val arg with
             | Integer(i) -> i
             | _ -> failwith "expected constant") in
-        let padding = num_bytes mod 16 in
-        [ ISub(Reg(RSP), Integer(num_bytes + padding));
+        let padding = Int64.(rem num_bytes (of_int 16)) in
+        [ ISub(Reg(RSP), Integer(Int64.add num_bytes padding));
           IMov(Reg(RAX), Reg(RSP)) ]
 
       (* Load *)
@@ -274,6 +279,7 @@ let rec instr_to_x86 instr instr_ty =
           | _ -> failwith "NYI"
         end
 
+      (* TODO: implement floating-point rem *)
       | "rem" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
           IMov(Reg(RBX), get_arg_val arg2);
@@ -395,7 +401,7 @@ let rec instr_to_x86 instr instr_ty =
       match op with
       | "jnz" ->
         [ IMov(Reg(RAX), get_arg_val arg1);
-          ICmp(Reg(RAX), Integer(0));
+          ICmp(Reg(RAX), Integer(Int64.zero));
           IJne(get_label arg2);
           (* TODO: Can we avoid this jump by generating code for the
              `arg3` block here? *)
@@ -558,7 +564,7 @@ let reg_size_fix (s: size) (a : arg) : arg =
 
 let rec arg_to_asm (a : arg) : string =
   match a with
-  | Integer(n) -> sprintf "%d" n
+  | Integer(n) -> (Int64.to_string n)
   (* TODO: floats get hoisted up to data segment. So, this should be
      removed *)
   | Float(n) -> sprintf "%f" n
@@ -724,7 +730,7 @@ let asm_of_data = function
   | DataDef(export, name, fields) ->
     (* "ret: dq 0" *)
     let get_val_str (v : qbe) = match v with
-      | Integer(i) -> (sprintf "%d, " i)
+      | Integer(i) -> (Int64.to_string i) ^ ", "
       | Float(f) -> (sprintf "%f, " f)
       | Double(f) -> (sprintf "%f, " f)
       | _ -> failwith (sprintf "expected Integer, but got %s" (ExtLib.dump v))
