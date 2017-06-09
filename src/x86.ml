@@ -2,6 +2,16 @@ open Qbe_parser
 open Printf
 open ExtLib
 
+type dwordreg =                 (* 32-bit registers *)
+  | EAX
+  | EBX
+  | ECX
+  | EDX
+  | ESP
+  | EBP
+  | EDI
+  | ESI
+
 type reg =
   | RAX
   | RBX
@@ -20,6 +30,7 @@ type reg =
   | R13
   | R14
   | R15
+  | DWordReg of dwordreg
 
 type bytereg =
   | AL
@@ -127,10 +138,10 @@ let lookup x env =
 
 let rec cmp_instr_to_x86 size cmp (arg1, arg2) =
   let cmp_part = match size with
-    (* FIX: For DWORD, this emits RDI, but it should be EDI *)
-
-    | W -> [ ICmp(Sized(DWORD_PTR, get_arg_val arg1), get_arg_val arg2);]
-    | L -> [ ICmp(Sized(QWORD_PTR, get_arg_val arg1), get_arg_val arg2);]
+    | W -> [ ICmp(Sized(DWORD_PTR, get_arg_val arg1),
+                  Sized(DWORD_PTR, get_arg_val arg2));]
+    | L -> [ ICmp(Sized(QWORD_PTR, get_arg_val arg1),
+                  get_arg_val arg2);]
     | S -> [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
              IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
              IFcomip(FReg(ST0), FReg(ST1)); ]
@@ -438,6 +449,10 @@ let assign_homes (block: instruction list) (mappings : (string, arg) Hashtbl.t)=
     let dest_loc = find_loc dest in
     let src_loc = find_loc src in
     (Sized(size, dest_loc), src_loc)
+  | Sized(ds, Var(dest)), Sized(ss, Var(src)) ->
+    let dest_loc = find_loc dest in
+    let src_loc = find_loc src in
+    (Sized(ds, dest_loc), Sized(ss, src_loc))
     
   | Var(dest), src ->
     let dest_loc = find_loc dest in
@@ -486,6 +501,16 @@ let r_to_asm (r : reg) : string =
   | R13 -> "r13"
   | R14 -> "r14"
   | R15 -> "r15"
+  | DWordReg(dw) -> match dw with
+    | EAX -> "eax"
+    | EBX -> "ebx"
+    | ECX -> "ecx"
+    | EDX -> "edx"
+    | ESP -> "esp"
+    | EBP -> "ebp"
+    | EDI -> "edi"
+    | ESI -> "esi"
+
 
 let fr_to_asm (fr : freg) : string =
   match fr with
@@ -513,6 +538,24 @@ let s_to_asm (s : size) : string =
   | WORD_PTR -> "WORD"
   | BYTE_PTR -> "BYTE"
 
+let reg_size_fix (s: size) (a : arg) =
+  match a with
+  | Reg(r) -> begin
+      match r with
+      | RAX -> Reg(DWordReg(EAX))
+      | RBX -> Reg(DWordReg(EBX))
+      | RCX -> Reg(DWordReg(ECX))
+      | RDX -> Reg(DWordReg(EDX))
+      | RSP -> Reg(DWordReg(ESP))
+      | RBP -> Reg(DWordReg(EBP))
+      | RDI -> Reg(DWordReg(EDI))
+      | RSI -> Reg(DWordReg(ESI))
+      | DWordReg(dw) -> failwith "DWordReg -> QWord conversion not supported"
+      | _ -> failwith (sprintf "Reg %s does not have a DWORD counterpart"
+                         (r_to_asm r))
+    end
+  | _ -> a
+
 let rec arg_to_asm (a : arg) : string =
   match a with
   | Integer(n) -> sprintf "%d" n
@@ -535,7 +578,7 @@ let rec arg_to_asm (a : arg) : string =
     else
       sprintf "[%s-%d]" (r_to_asm r) (-1 * n)
   | Sized(s, a) ->
-    sprintf "%s %s" (s_to_asm s) (arg_to_asm a)
+    sprintf "%s %s" (s_to_asm s) (arg_to_asm (reg_size_fix s a))
   | Var(v) ->
     sprintf "%s" v
 
