@@ -33,8 +33,6 @@ type reg =
   | R13
   | R14
   | R15
-  | DWordReg of dwordreg
-
 
 type freg =
   | ST0 | ST1 | ST2 | ST3
@@ -54,6 +52,7 @@ type arg =
   | Float of float
   | HexConst of int
   | Reg of reg
+  | DWordReg of dwordreg
   | ByteReg of bytereg
   | FReg of freg
   | SSEReg of ssereg
@@ -502,15 +501,17 @@ let r_to_asm (r : reg) : string =
   | R13 -> "r13"
   | R14 -> "r14"
   | R15 -> "r15"
-  | DWordReg(dw) -> match dw with
-    | EAX -> "eax"
-    | EBX -> "ebx"
-    | ECX -> "ecx"
-    | EDX -> "edx"
-    | ESP -> "esp"
-    | EBP -> "ebp"
-    | EDI -> "edi"
-    | ESI -> "esi"
+
+let dr_to_asm (dr : dwordreg) : string =
+  match dr with
+  | EAX -> "eax"
+  | EBX -> "ebx"
+  | ECX -> "ecx"
+  | EDX -> "edx"
+  | ESP -> "esp"
+  | EBP -> "ebp"
+  | EDI -> "edi"
+  | ESI -> "esi"
 
 
 let fr_to_asm (fr : freg) : string =
@@ -539,19 +540,18 @@ let s_to_asm (s : size) : string =
   | WORD_PTR -> "WORD"
   | BYTE_PTR -> "BYTE"
 
-let reg_size_fix (s: size) (a : arg) =
+let reg_size_fix (s: size) (a : arg) : arg =
   match (s, a) with
   | DWORD_PTR, Reg(r) -> begin
       match r with
-      | RAX -> Reg(DWordReg(EAX))
-      | RBX -> Reg(DWordReg(EBX))
-      | RCX -> Reg(DWordReg(ECX))
-      | RDX -> Reg(DWordReg(EDX))
-      | RSP -> Reg(DWordReg(ESP))
-      | RBP -> Reg(DWordReg(EBP))
-      | RDI -> Reg(DWordReg(EDI))
-      | RSI -> Reg(DWordReg(ESI))
-      | DWordReg(dw) -> failwith "DWordReg -> QWord conversion not supported"
+      | RAX -> DWordReg(EAX)
+      | RBX -> DWordReg(EBX)
+      | RCX -> DWordReg(ECX)
+      | RDX -> DWordReg(EDX)
+      | RSP -> DWordReg(ESP)
+      | RBP -> DWordReg(EBP)
+      | RDI -> DWordReg(EDI)
+      | RSI -> DWordReg(ESI)
       | _ -> failwith (sprintf "Reg %s does not have a DWORD counterpart"
                          (r_to_asm r))
     end
@@ -565,6 +565,7 @@ let rec arg_to_asm (a : arg) : string =
   | Float(n) -> sprintf "%f" n
   | HexConst(n) -> sprintf "0x%X" n
   | Reg(r) -> r_to_asm r
+  | DWordReg(dr) -> dr_to_asm dr
   | ByteReg(br) -> br_to_asm br
   | FReg(fr) -> fr_to_asm fr
   | SSEReg(sr) -> sr_to_asm sr
