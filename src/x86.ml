@@ -111,6 +111,10 @@ type instruction =
   | IAddSd of arg * arg
   | ISubSs of arg * arg
   | ISubSd of arg * arg
+  | IMulSs of arg * arg
+  | IMulSd of arg * arg
+  | IDivSs of arg * arg
+  | IDivSd of arg * arg
 
 let arg_reg_order = List.map (fun r -> Reg(r))
     [RDI; RSI; RDX; RCX; R8; R9]
@@ -259,12 +263,15 @@ let rec instr_to_x86 instr instr_ty =
           | Some(BaseTy(W)) | Some(BaseTy(L)) ->
             [ IMov(Reg(RAX), get_arg_val arg1);
               IMul(Reg(RAX), get_arg_val arg2); ]
-          | Some(BaseTy(D)) | Some(BaseTy(S)) ->
-            [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-              IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-              IFmul(FReg(ST0), FReg(ST1));
-              IFst(Sized(QWORD_PTR, VarOffset(0, Var("ret"))));
-              IMovSd(SSEReg(Xmm0), VarOffset(0, Var("ret")));
+          | Some(BaseTy(D)) ->
+            [ IMovSd(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
+              IMovSd(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+              IMulSd(SSEReg(Xmm0), SSEReg(Xmm1));
+            ]
+          | Some(BaseTy(S)) ->
+            [ IMovSs(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
+              IMovSs(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+              IMulSs(SSEReg(Xmm0), SSEReg(Xmm1));
             ]
           | _ -> failwith "NYI"
         end
@@ -276,12 +283,15 @@ let rec instr_to_x86 instr instr_ty =
               IMov(Reg(RBX), get_arg_val arg2);
               ICdq;
               ISDiv(Reg(RBX)); ]
-          | Some(BaseTy(D)) | Some(BaseTy(S)) ->
-            [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-              IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-              IFdiv(FReg(ST0), FReg(ST1));
-              IFst(Sized(QWORD_PTR, VarOffset(0, Var("ret"))));
-              IMovSd(SSEReg(Xmm0), VarOffset(0, Var("ret")));
+          | Some(BaseTy(D)) ->
+            [ IMovSd(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
+              IMovSd(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+              IDivSd(SSEReg(Xmm0), SSEReg(Xmm1));
+            ]
+          | Some(BaseTy(S)) ->
+            [ IMovSs(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
+              IMovSs(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+              IDivSs(SSEReg(Xmm0), SSEReg(Xmm1));
             ]
           | _ -> failwith "NYI"
         end
@@ -692,6 +702,15 @@ let i_to_asm (i : instruction) : string =
       sprintf "  subss %s, %s" (arg_to_asm left) (arg_to_asm right)
     | ISubSd(left, right) ->
       sprintf "  subsd %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | IMulSs(left, right) ->
+      sprintf "  mulss %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | IMulSd(left, right) ->
+      sprintf "  mulsd %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | IDivSs(left, right) ->
+      sprintf "  divss %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | IDivSd(left, right) ->
+      sprintf "  divsd %s, %s" (arg_to_asm left) (arg_to_asm right)
+
     | IRet ->
       let restore_callee_save_regs = (List.fold_left (fun acc r ->
           let r = match r with
