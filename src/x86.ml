@@ -217,8 +217,6 @@ let rec instr_to_x86 instr instr_ty =
     begin
       match op with
       (* Arithmetic/logic *)
-      (* TODO: perform only the necessary instruction here. Add
-         another pass to move to the "scratch" register. *)
       | "add" ->
         begin
           match instr_ty with
@@ -243,16 +241,15 @@ let rec instr_to_x86 instr instr_ty =
           | Some(BaseTy(W)) | Some(BaseTy(L)) ->
             [ IMov(Reg(RAX), get_arg_val arg1);
               ISub(Reg(RAX), get_arg_val arg2); ]
-          | Some(BaseTy(D)) | Some(BaseTy(S)) ->
-            [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-              IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-              IFsub(FReg(ST0), FReg(ST1));
-              (* TODO: This `ret` shouldn't be a static string. (Will one
-                 address in the data segment be enough?). Is there a
-                 better way than to reserve space in the data/bss
-                 segment? *)
-              IFst(Sized(QWORD_PTR, VarOffset(0, Var("ret"))));
-              IMovSd(SSEReg(Xmm0), VarOffset(0, Var("ret")));
+          | Some(BaseTy(D)) ->
+            [ IMovSd(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
+              IMovSd(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+              ISubSd(SSEReg(Xmm0), SSEReg(Xmm1));
+            ]
+          | Some(BaseTy(S)) ->
+            [ IMovSs(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
+              IMovSs(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+              ISubSs(SSEReg(Xmm0), SSEReg(Xmm1));
             ]
           | _ -> failwith "NYI"
         end
