@@ -4,6 +4,7 @@
   - `assign_homes` currently allocates 8 bytes for all data. W, S can
     be allocated only 4 bytes(note: padding will need to be added for
     stack alignment)
+- Register allocation. Currently, everything gets spilled to memory.
 - Handle floating point numbers and operations
   - This is partially done now(except ordered/unordered comparison
     operators-- cod, cos, cuod, cuos), but currently floating-point

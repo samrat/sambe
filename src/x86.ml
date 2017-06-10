@@ -39,7 +39,8 @@ type freg =
   | ST4 | ST5 | ST6 | ST7
 
 type ssereg =
-  | Xmm0
+  | Xmm0 | Xmm1 | Xmm2 | Xmm3 | Xmm4 | Xmm5 | Xmm6 | Xmm7
+  | Xmm8 | Xmm9 | Xmm10 | Xmm11 | Xmm12 | Xmm13 | Xmm14 | Xmm15
 
 type size =
   | QWORD_PTR
@@ -71,6 +72,7 @@ type instruction =
   | IMovZx of arg * arg
   | IMovSx of arg * arg
   | IMovSd of arg * arg
+  | IMovSs of arg * arg
   | IAdd of arg * arg
   | ISub of arg * arg
   | IMul of arg * arg
@@ -95,6 +97,7 @@ type instruction =
 
   | ILabel of string
 
+  (* TODO: remove FPU instructions after switch to SSE is complete *)
   | IFld of arg
   | IFst of arg
   | IFadd of arg * arg
@@ -102,6 +105,12 @@ type instruction =
   | IFmul of arg * arg
   | IFdiv of arg * arg
   | IFcomip of arg * arg
+
+  (* SSE instructions *)
+  | IAddSs of arg * arg
+  | IAddSd of arg * arg
+  | ISubSs of arg * arg
+  | ISubSd of arg * arg
 
 let arg_reg_order = List.map (fun r -> Reg(r))
     [RDI; RSI; RDX; RCX; R8; R9]
@@ -172,6 +181,8 @@ let rec instr_to_x86 instr instr_ty =
       | "jmp" ->
         [ IJmp(get_label arg) ]
       | "ret" ->
+        (* TODO: if function return type is float/double then use Xmm0
+           instead *)
         [ IMov(Sized(size, Reg(RAX)), get_arg_val arg);
           IRet ]
       (* Allocate *)
@@ -214,16 +225,15 @@ let rec instr_to_x86 instr instr_ty =
           | Some(BaseTy(W)) | Some(BaseTy(L)) ->
             [ IMov(Reg(RAX), get_arg_val arg1);
               IAdd(Reg(RAX), get_arg_val arg2); ]
-          | Some(BaseTy(D)) | Some(BaseTy(S)) ->
-            [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-              IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-              IFadd(FReg(ST0), FReg(ST1));
-              (* TODO: This `ret` shouldn't be a static string. (Will one
-                 address in the data segment be enough?). Is there a
-                 better way than to reserve space in the data/bss
-                 segment? *)
-              IFst(Sized(QWORD_PTR, VarOffset(0, Var("ret"))));
-              IMovSd(SSEReg(Xmm0), VarOffset(0, Var("ret")));
+          | Some(BaseTy(D)) ->
+            [ IMovSd(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
+              IMovSd(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+              IAddSd(SSEReg(Xmm0), SSEReg(Xmm1));
+            ]
+          | Some(BaseTy(S)) ->
+            [ IMovSs(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
+              IMovSs(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+              IAddSs(SSEReg(Xmm0), SSEReg(Xmm1));
             ]
           | _ -> failwith "NYI"
         end
@@ -533,6 +543,21 @@ let fr_to_asm (fr : freg) : string =
 let sr_to_asm (sr : ssereg) : string =
   match sr with
   | Xmm0 -> "xmm0"
+  | Xmm1 -> "xmm1"
+  | Xmm2 -> "xmm2"
+  | Xmm3 -> "xmm3"
+  | Xmm4 -> "xmm4"
+  | Xmm5 -> "xmm5"
+  | Xmm6 -> "xmm6"
+  | Xmm7 -> "xmm7"
+  | Xmm8 -> "xmm8"
+  | Xmm9 -> "xmm9"
+  | Xmm10 -> "xmm10"
+  | Xmm11 -> "xmm11"
+  | Xmm12 -> "xmm12"
+  | Xmm13 -> "xmm13"
+  | Xmm14 -> "xmm14"
+  | Xmm15 -> "xmm15"
 
 
 let br_to_asm = function
@@ -611,6 +636,8 @@ let i_to_asm (i : instruction) : string =
       sprintf "  movsx %s, %s" (arg_to_asm dest) (arg_to_asm src)
     | IMovSd(dest, src) ->
       sprintf "  movsd %s, %s" (arg_to_asm dest) (arg_to_asm src)
+    | IMovSs(dest, src) ->
+      sprintf "  movss %s, %s" (arg_to_asm dest) (arg_to_asm src)
     | IAdd(dest, to_add) ->
       sprintf "  add %s, %s" (arg_to_asm dest) (arg_to_asm to_add)
     | ISub(dest, to_sub) ->
@@ -660,6 +687,14 @@ let i_to_asm (i : instruction) : string =
       sprintf "  fdiv %s, %s" (arg_to_asm left) (arg_to_asm right)
     | IFcomip(left, right) ->
       sprintf "  fcomip %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | IAddSs(left, right) ->
+      sprintf "  addss %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | IAddSd(left, right) ->
+      sprintf "  addsd %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | ISubSs(left, right) ->
+      sprintf "  subss %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | ISubSd(left, right) ->
+      sprintf "  subsd %s, %s" (arg_to_asm left) (arg_to_asm right)
     | IRet ->
       let restore_callee_save_regs = (List.fold_left (fun acc r ->
           let r = match r with
@@ -739,8 +774,9 @@ let asm_of_data = function
       | ExtTy(B) -> "b"
       | BaseTy(W) -> "w"        (* 32-bit *)
       | BaseTy(L) -> "q"        (* 64-bit *)
-      | BaseTy(D) -> "q"
-      | BaseTy(S) -> "w"
+      | BaseTy(S) -> "d"        (* 32-bit float *)
+      | BaseTy(D) -> "q"        (* 64-bit float *)
+
       | _ -> failwith "NYI" in
     let field_vals_str (typ, vs) = List.fold_left 
         (fun acc x -> acc ^ (get_val_str x))
