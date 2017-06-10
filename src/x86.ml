@@ -97,15 +97,6 @@ type instruction =
 
   | ILabel of string
 
-  (* TODO: remove FPU instructions after switch to SSE is complete *)
-  | IFld of arg
-  | IFst of arg
-  | IFadd of arg * arg
-  | IFsub of arg * arg
-  | IFmul of arg * arg
-  | IFdiv of arg * arg
-  | IFcomip of arg * arg
-
   (* SSE instructions *)
   | IAddSs of arg * arg
   | IAddSd of arg * arg
@@ -115,6 +106,8 @@ type instruction =
   | IMulSd of arg * arg
   | IDivSs of arg * arg
   | IDivSd of arg * arg
+  | IUcomiSs of arg * arg
+  | IUcomiSd of arg * arg
 
 let arg_reg_order = List.map (fun r -> Reg(r))
     [RDI; RSI; RDX; RCX; R8; R9]
@@ -155,12 +148,12 @@ let rec cmp_instr_to_x86 size cmp (arg1, arg2) =
                   Sized(DWORD_PTR, get_arg_val arg2));]
     | L -> [ ICmp(Sized(QWORD_PTR, get_arg_val arg1),
                   get_arg_val arg2);]
-    | S -> [ IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-             IFld(Sized(DWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-             IFcomip(FReg(ST0), FReg(ST1)); ]
-    | D -> [ IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg1))));
-             IFld(Sized(QWORD_PTR, VarOffset(0, (get_arg_val arg2))));
-             IFcomip(FReg(ST0), FReg(ST1)); ]
+    | S -> [ IMovSs(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
+             IMovSs(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+             IUcomiSs(SSEReg(Xmm0), SSEReg(Xmm1)); ]
+    | D -> [ IMovSd(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
+             IMovSd(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+             IUcomiSd(SSEReg(Xmm0), SSEReg(Xmm1)); ]
     | _ -> failwith "expected integer or float type"
   in
   let set_result = [ ISet(cmp, ByteReg(AL));
@@ -680,20 +673,7 @@ let i_to_asm (i : instruction) : string =
       sprintf "  push %s" (arg_to_asm arg)
     | IPop(arg) ->
       sprintf "  pop %s" (arg_to_asm arg)
-    | IFld(arg) ->
-      sprintf "  fld %s" (arg_to_asm arg)
-    | IFst(arg) ->
-      sprintf "  fst %s" (arg_to_asm arg)
-    | IFadd(left, right) ->
-      sprintf "  fadd %s, %s" (arg_to_asm left) (arg_to_asm right)
-    | IFsub(left, right) ->
-      sprintf "  fsub %s, %s" (arg_to_asm left) (arg_to_asm right)
-    | IFmul(left, right) ->
-      sprintf "  fmul %s, %s" (arg_to_asm left) (arg_to_asm right)
-    | IFdiv(left, right) ->
-      sprintf "  fdiv %s, %s" (arg_to_asm left) (arg_to_asm right)
-    | IFcomip(left, right) ->
-      sprintf "  fcomip %s, %s" (arg_to_asm left) (arg_to_asm right)
+
     | IAddSs(left, right) ->
       sprintf "  addss %s, %s" (arg_to_asm left) (arg_to_asm right)
     | IAddSd(left, right) ->
@@ -710,6 +690,10 @@ let i_to_asm (i : instruction) : string =
       sprintf "  divss %s, %s" (arg_to_asm left) (arg_to_asm right)
     | IDivSd(left, right) ->
       sprintf "  divsd %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | IUcomiSs(left, right) ->
+      sprintf "  ucomiss %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | IUcomiSd(left, right) ->
+      sprintf "  ucomisd %s, %s" (arg_to_asm left) (arg_to_asm right)
 
     | IRet ->
       let restore_callee_save_regs = (List.fold_left (fun acc r ->
