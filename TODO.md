@@ -5,13 +5,6 @@
     be allocated only 4 bytes(note: padding will need to be added for
     stack alignment)
 - Register allocation. Currently, everything gets spilled to memory.
-- Handle floating point numbers and operations
-  - This is partially done now(except ordered/unordered comparison
-    operators-- cod, cos, cuod, cuos), but currently floating-point
-    ops are carried out using FPU. We really should be using SSE
-    instead.
-  - Floats should get hoisted out into `data` segment. Currently, this
-    needs to be done manually in the QBE program
 - `type` definitions are currently not implemented.
 - If a function is called that is not defined, assume it is an
   `extern`(?)

@@ -110,7 +110,10 @@ type instruction =
   | IComiSd of arg * arg
 
 let arg_reg_order = List.map (fun r -> Reg(r))
-    [RDI; RSI; RDX; RCX; R8; R9]
+    [ RDI; RSI; RDX; RCX; R8; R9 ]
+
+let sse_reg_order = List.map (fun r -> SSEReg(r))
+    [ Xmm0; Xmm1; Xmm2; Xmm3; Xmm4; Xmm5; Xmm6; Xmm7 ]
 
 let caller_save_regs = List.map (fun r -> Reg(r))
     [RDX; RCX; RSI; RDI; R8; R9; R10; R11]
@@ -434,10 +437,17 @@ let rec instr_to_x86 instr instr_ty =
     (* save caller-save registers *)
     (List.map (fun r -> IPush(r)) caller_save_regs) @
     (* TODO: handle more than 6 args *)
-    (List.map2 (fun (ty, arg) reg ->
-         IMov(reg, get_arg_val arg))
-        (List.take 6 (List.rev args))
-        (List.take (min 6 (List.length args)) arg_reg_order)) @
+    let (movs, _, _) = (List.fold_left (fun (movs, gen_regs, sse_regs) (ty, arg)  ->
+         match ty with
+         | BaseTy(D) | BaseTy(S) ->
+           let dest = List.hd sse_regs in
+           ((IMov(dest, get_arg_val arg))::movs, gen_regs, List.tl sse_regs)
+         | _ ->
+           let dest = List.hd gen_regs in
+           ((IMov(dest, get_arg_val arg))::movs, List.tl gen_regs, sse_regs))
+        ([], arg_reg_order, sse_reg_order)
+        (List.rev args)) in
+    movs @
     [ ICall(fn) ] @
     (* Restore caller-save registers *)
     (List.map (fun r -> IPop(r)) (List.rev caller_save_regs))
@@ -803,12 +813,29 @@ let asm_of_func (func: qbe) (data_def_names: string list)  : string =
   match func with
   | FunDef(_, retty, name, args, blocks) ->
     let mappings : (string, arg) Hashtbl.t = Hashtbl.create 16 in
-    (* TODO: Handle more than 6 args *)
+    (* TODO: Handle more than 6 args. ie. spill to stack *)
     (* Add args to `mappings` *)
-    ignore (List.map2 (fun (ty, arg) reg ->
-        Hashtbl.add mappings (get_ident_name arg) reg)
-        (List.take 6 (List.rev args))
-        (List.take (min 6 (List.length args)) arg_reg_order));
+    ignore (List.fold_left (fun (gen_regs, sse_regs) (ty, arg)  ->
+         match ty with
+           | BaseTy(D) | BaseTy(S) ->
+             begin
+               let dest = List.hd sse_regs in
+               print_endline (sprintf "%s" (ExtLib.dump dest));
+               Hashtbl.add mappings (get_ident_name arg) dest;
+               (gen_regs, List.tl sse_regs)
+             end
+           | _ ->
+             begin
+               let size = match ty with
+                 | BaseTy(W) -> DWORD_PTR
+                 | BaseTy(L) -> QWORD_PTR
+                 | _ -> failwith "NYI: asm_of_func add arg mappings" in
+               let dest = Sized(size, List.hd gen_regs) in
+               Hashtbl.add mappings (get_ident_name arg) dest;
+               (List.tl gen_regs, sse_regs)
+             end)
+        (arg_reg_order, sse_reg_order)
+        (List.rev args));
     (* Add data defs to `mappings` *)
     ignore (List.map (fun data_def ->
         Hashtbl.add mappings data_def (Var(data_def)))
