@@ -178,10 +178,20 @@ let rec instr_to_x86 instr instr_ty =
       | "jmp" ->
         [ IJmp(get_label arg) ]
       | "ret" ->
-        (* TODO: if function return type is float/double then use Xmm0
-           instead *)
-        [ IMov(Sized(size, Reg(RAX)), get_arg_val arg);
-          IRet ]
+        begin
+        match instr_ty with
+        | Some(BaseTy(S)) ->
+          [ IMovSs(SSEReg(Xmm0), get_arg_val arg);
+            IRet;
+          ]
+        | Some(BaseTy(D)) ->
+          [ IMovSd(SSEReg(Xmm0), get_arg_val arg);
+            IRet;
+          ]
+        | _ ->
+          [ IMov(Sized(size, Reg(RAX)), get_arg_val arg);
+            IRet ]
+          end
       (* Allocate *)
       (* NOTE: TODO: when there are multiple alloc's in a block, this
          will be really space-inefficient. We need to figure out the
@@ -434,12 +444,12 @@ let rec instr_to_x86 instr instr_ty =
   | _ -> failwith "NYI: instr_to_x86"
 
 
-let block_to_x86 block =
+let block_to_x86 (retty: ty option) block =
   match block with
   | Block(label, [], reg_instrs, last_instr) ->
     [ ILabel(get_label label) ] @
     List.flatten (List.map (fun i -> instr_to_x86 i None) reg_instrs) @
-    (instr_to_x86 last_instr None)
+    (instr_to_x86 last_instr retty)
   | Block(_, phis, _, _) -> failwith "expected empty phi instr list"
   | _ -> failwith "NYI"
 
@@ -551,6 +561,12 @@ let assign_homes (block: instruction list)
   | (dest, src) -> (dest, src)
   in
   let fixup_instr = function
+    | IMovSs(d, s) ->
+      let (new_dest, new_src) = replace_instr2_args_with_locs (d, s) in
+      IMovSs(new_dest, new_src)
+    | IMovSd(d, s) ->
+      let (new_dest, new_src) = replace_instr2_args_with_locs (d, s) in
+      IMovSd(new_dest, new_src)
     | IMov(d, s) ->
       let (new_dest, new_src) = replace_instr2_args_with_locs (d, s) in
       IMov(new_dest, new_src)
@@ -785,7 +801,7 @@ let to_asm (is : instruction list) : string =
 
 let asm_of_func (func: qbe) (data_def_names: string list)  : string =
   match func with
-  | FunDef(_, _, name, args, blocks) ->
+  | FunDef(_, retty, name, args, blocks) ->
     let mappings : (string, arg) Hashtbl.t = Hashtbl.create 16 in
     (* TODO: Handle more than 6 args *)
     (* Add args to `mappings` *)
@@ -800,7 +816,7 @@ let asm_of_func (func: qbe) (data_def_names: string list)  : string =
     let (num_vars, compiled_blocks) =
       blocks
       |> Cfg.uniquify_block_labels (get_ident_name name)
-      |> List.map block_to_x86
+      |> List.map (block_to_x86 (Some(retty)))
       |> List.flatten
       |> (fun x -> assign_homes x mappings)
     in
