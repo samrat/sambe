@@ -65,7 +65,7 @@ type arg =
 
 type cc =
   | E | NE | LE | LT | GT | GE
-  | A | AE | B | BE
+  | A | AE | B | BE | P | NP
 
 type instruction =
   | IMov of arg * arg
@@ -106,8 +106,8 @@ type instruction =
   | IMulSd of arg * arg
   | IDivSs of arg * arg
   | IDivSd of arg * arg
-  | IUcomiSs of arg * arg
-  | IUcomiSd of arg * arg
+  | IComiSs of arg * arg
+  | IComiSd of arg * arg
 
 let arg_reg_order = List.map (fun r -> Reg(r))
     [RDI; RSI; RDX; RCX; R8; R9]
@@ -150,10 +150,10 @@ let rec cmp_instr_to_x86 size cmp (arg1, arg2) =
                   get_arg_val arg2);]
     | S -> [ IMovSs(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
              IMovSs(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
-             IUcomiSs(SSEReg(Xmm0), SSEReg(Xmm1)); ]
+             IComiSs(SSEReg(Xmm0), SSEReg(Xmm1)); ]
     | D -> [ IMovSd(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
              IMovSd(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
-             IUcomiSd(SSEReg(Xmm0), SSEReg(Xmm1)); ]
+             IComiSd(SSEReg(Xmm0), SSEReg(Xmm1)); ]
     | _ -> failwith "expected integer or float type"
   in
   let set_result = [ ISet(cmp, ByteReg(AL));
@@ -391,10 +391,11 @@ let rec instr_to_x86 instr instr_ty =
       | "cugtl" ->
         cmp_instr_to_x86 L A (arg1, arg2)
 
-      | "cod" -> failwith "NYI: cod"
-      | "cos" -> failwith "NYI: cos"
-      | "cuod" -> failwith "NYI: cuod"
-      | "cuos" -> failwith "NYI: cuos"
+      | "cos" -> cmp_instr_to_x86 S NP (arg1, arg2)
+      | "cod" -> cmp_instr_to_x86 D NP (arg1, arg2)
+
+      | "cuos" -> cmp_instr_to_x86 S P (arg1, arg2)
+      | "cuod" -> cmp_instr_to_x86 D P (arg1, arg2)
 
       (* Store *)
       | "storew" ->
@@ -625,6 +626,8 @@ let cc_to_asm = function
   | AE -> "ae"
   | B -> "b"
   | BE -> "be"
+  | P -> "p"
+  | NP -> "np"
     
 let i_to_asm (i : instruction) : string =
   match i with
@@ -690,10 +693,10 @@ let i_to_asm (i : instruction) : string =
       sprintf "  divss %s, %s" (arg_to_asm left) (arg_to_asm right)
     | IDivSd(left, right) ->
       sprintf "  divsd %s, %s" (arg_to_asm left) (arg_to_asm right)
-    | IUcomiSs(left, right) ->
-      sprintf "  ucomiss %s, %s" (arg_to_asm left) (arg_to_asm right)
-    | IUcomiSd(left, right) ->
-      sprintf "  ucomisd %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | IComiSs(left, right) ->
+      sprintf "  comiss %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | IComiSd(left, right) ->
+      sprintf "  comisd %s, %s" (arg_to_asm left) (arg_to_asm right)
 
     | IRet ->
       let restore_callee_save_regs = (List.fold_left (fun acc r ->
