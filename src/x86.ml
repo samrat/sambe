@@ -124,7 +124,7 @@ let get_ident_name = function
   | _ -> failwith "NYI"
 
 let get_arg_val arg = match arg with
-  | GlobalIdent(id) -> Var(id)
+  | GlobalIdent(id) -> VarOffset(0, Var(id))
   | FuncIdent(id) -> Var(id)
   | Integer(i) -> Integer(i)
   | Float(f) -> Float(f)
@@ -452,32 +452,32 @@ let rec hoist_single_instr_float instr counter new_data =
       Assign(dest, typ, hoist_single_instr_float assign_instr counter new_data)
     | Instr1(op, arg) -> begin
         match arg with
-        | Float(f) ->
+        | Float(f) | Double(f) ->
           let var_name = sprintf "fp%d" !counter in
           (counter := !counter + 1);
-          Hashtbl.add new_data f var_name;
+          Hashtbl.add new_data arg var_name;
           Instr1(op, GlobalIdent(var_name))
         | _ -> instr
       end
     | Instr2(op, arg1, arg2) -> begin
         match (arg1, arg2) with
-        | Float(f1), Float(f2) ->
+        | Float(f1), Float(f2) | Double(f1), Double(f2) ->
           let new_f1 = sprintf "fp%d" !counter in
           (counter := !counter + 1);
-          Hashtbl.add new_data f1 new_f1;
+          Hashtbl.add new_data arg1 new_f1;
           let new_f2 = sprintf "fp%d" !counter in
           (counter := !counter + 1);
-          Hashtbl.add new_data f2 new_f2;
+          Hashtbl.add new_data arg2 new_f2;
           Instr2(op, GlobalIdent(new_f1), GlobalIdent(new_f2))
-        | Float(f1) , arg2 ->
+        | Float(f1) , arg2 | Double(f1), arg2 ->
           let new_f1 = sprintf "fp%d" !counter in
           (counter := !counter + 1);
-          Hashtbl.add new_data f1 new_f1;
+          Hashtbl.add new_data arg1 new_f1;
           Instr2(op, GlobalIdent(new_f1), arg2)
-        | arg1, Float(f2) ->
+        | arg1, Float(f2) | arg1, Double(f2) ->
           let new_f2 = sprintf "fp%d" !counter in
           (counter := !counter + 1);
-          Hashtbl.add new_data f2 new_f2;
+          Hashtbl.add new_data arg2 new_f2;
           Instr2(op, arg1, GlobalIdent(new_f2))
         | _, _ -> instr
       end
@@ -487,7 +487,7 @@ let rec hoist_single_instr_float instr counter new_data =
     | _ -> instr
   end
 
-let hoist_out_floats (block_instrs: instr list) (counter: int ref) (new_data: (float, string) Hashtbl.t)
+let hoist_out_floats (block_instrs: instr list) (counter: int ref) (new_data: (qbe, string) Hashtbl.t)
   : (instr list) =
   let new_instrs = List.map (fun i -> (hoist_single_instr_float i counter new_data))
       block_instrs in
@@ -863,7 +863,12 @@ let hoist_all_floats funcs =
   let counter = ref 0 in
   let new_funcs = List.map (fun func -> hoist_func_floats func counter new_data) funcs in
   let new_data_defs = Hashtbl.fold
-      (fun k v acc -> (DataDef(false, GlobalIdent(v), [(BaseTy(D), [Double(k)])]))::acc)
+      (fun k v acc ->
+         let typ = match k with
+           | Double(_) -> BaseTy(D)
+           | Float(_) -> BaseTy(S)
+           | _ -> failwith "expected float or double" in
+         (DataDef(false, GlobalIdent(v), [(typ, [k])]))::acc)
       new_data [] in
   (new_funcs, new_data_defs)
 
