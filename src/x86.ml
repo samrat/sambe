@@ -443,10 +443,76 @@ let block_to_x86 block =
   | Block(_, phis, _, _) -> failwith "expected empty phi instr list"
   | _ -> failwith "NYI"
 
+let rec hoist_single_instr_float instr counter new_data =
+  begin
+    match instr with
+    | Assign(dest, typ, assign_instr) ->
+      (* NOTE: TODO: We could check `typ` to figure out whether we
+         should recurse at all. *)
+      Assign(dest, typ, hoist_single_instr_float assign_instr counter new_data)
+    | Instr1(op, arg) -> begin
+        match arg with
+        | Float(f) ->
+          let var_name = sprintf "fp%d" !counter in
+          (counter := !counter + 1);
+          Hashtbl.add new_data f var_name;
+          Instr1(op, GlobalIdent(var_name))
+        | _ -> instr
+      end
+    | Instr2(op, arg1, arg2) -> begin
+        match (arg1, arg2) with
+        | Float(f1), Float(f2) ->
+          let new_f1 = sprintf "fp%d" !counter in
+          (counter := !counter + 1);
+          Hashtbl.add new_data f1 new_f1;
+          let new_f2 = sprintf "fp%d" !counter in
+          (counter := !counter + 1);
+          Hashtbl.add new_data f2 new_f2;
+          Instr2(op, GlobalIdent(new_f1), GlobalIdent(new_f2))
+        | Float(f1) , arg2 ->
+          let new_f1 = sprintf "fp%d" !counter in
+          (counter := !counter + 1);
+          Hashtbl.add new_data f1 new_f1;
+          Instr2(op, GlobalIdent(new_f1), arg2)
+        | arg1, Float(f2) ->
+          let new_f2 = sprintf "fp%d" !counter in
+          (counter := !counter + 1);
+          Hashtbl.add new_data f2 new_f2;
+          Instr2(op, arg1, GlobalIdent(new_f2))
+        | _, _ -> instr
+      end
+    (* NOTE: there are no Instr3's that take a float *)
+    | Instr3(op, arg1, arg2, arg3) -> instr
+    | Phi(bs) -> failwith "NYI"
+    | _ -> instr
+  end
+
+let hoist_out_floats (block_instrs: instr list) (counter: int ref) (new_data: (float, string) Hashtbl.t)
+  : (instr list) =
+  let new_instrs = List.map (fun i -> (hoist_single_instr_float i counter new_data))
+      block_instrs in
+  new_instrs
+
+let hoist_block_floats block counter new_data =
+  match block with
+  | Block(label, phis, reg_instrs, last_instr) ->
+    let new_phis = hoist_out_floats phis counter new_data in
+    let new_reg_instrs = hoist_out_floats reg_instrs counter new_data in
+    let new_last_instr = hoist_single_instr_float last_instr counter new_data in
+    Block(label, new_phis, new_reg_instrs, new_last_instr)
+  | _ -> failwith "expected block"
+
+let hoist_func_floats func counter new_data =
+  match func with
+  | FunDef(export, retty, name, args, blocks) ->
+    let new_blocks = List.map (fun block -> hoist_block_floats block counter new_data) blocks in
+    FunDef(export, retty, name, args, new_blocks)
+  | _ -> failwith "expected FunDef"
 
 (* TODO: Currently, this puts everything in memory. Implement the
    register allocation pass to fix that. *)
-let assign_homes (block: instruction list) (mappings : (string, arg) Hashtbl.t)=
+let assign_homes (block: instruction list)
+      (mappings : (string, arg) Hashtbl.t) =
   let counter = ref 1 in
   let find_loc v =
     match Hashtbl.find_option mappings v with
@@ -792,6 +858,14 @@ let asm_of_data = function
     (sprintf "\n%s: %s" (get_ident_name name) s)
   | _ -> failwith "expected data"
 
+let hoist_all_floats funcs =
+  let new_data = Hashtbl.create 12 in
+  let counter = ref 0 in
+  let new_funcs = List.map (fun func -> hoist_func_floats func counter new_data) funcs in
+  let new_data_defs = Hashtbl.fold
+      (fun k v acc -> (DataDef(false, GlobalIdent(v), [(BaseTy(D), [Double(k)])]))::acc)
+      new_data [] in
+  (new_funcs, new_data_defs)
 
 let segregate_toplevel_defs defs =
   List.fold_left (fun (data, typs, funcs) def ->
@@ -803,20 +877,21 @@ let segregate_toplevel_defs defs =
     ([], [], [])
     defs
 
-
 let compile_to_file ls oc =
   let parsed_list = Qbe_parser.get_parsed_list ls in
   (* TODO: compose functions to avoid repeated maps *)
   let dessad = List.map Cfg.de_ssa parsed_list in
   let (data_defs, type_defs, func_defs) = 
     segregate_toplevel_defs dessad in
+  let (new_func_defs, additional_data_defs) = hoist_all_floats func_defs in
+  let data_defs = data_defs @ additional_data_defs in
   let data_def_names = List.map (fun data_def -> match data_def with
       | DataDef(_, GlobalIdent(name), _) -> name
       | _ -> failwith "DataDef expected")
       data_defs in
   let compiled_data_defs = List.fold_left (fun acc x -> acc ^ (asm_of_data x)) "" data_defs in
   (* let compiled_type_defs = List.fold_left (fun acc x -> acc ^ (compile_toplevel x)) "" type_defs in *)
-  let compiled_func_defs = List.fold_left (fun acc x -> acc ^ (asm_of_func x data_def_names)) "" func_defs in
+  let compiled_func_defs = List.fold_left (fun acc x -> acc ^ (asm_of_func x data_def_names)) "" new_func_defs in
   let compiled =
     "section .data" ^ compiled_data_defs ^
     (* TODO: type defs *)
