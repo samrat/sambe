@@ -108,6 +108,12 @@ type instruction =
   | IDivSd of arg * arg
   | IComiSs of arg * arg
   | IComiSd of arg * arg
+  | ICvtSs2Sd of arg * arg
+  | ICvtSd2Ss of arg * arg
+  | ICvtSs2Si of arg * arg
+  | ICvtSd2Si of arg * arg
+  | ICvtSi2Ss of arg * arg
+  | ICvtSi2Sd of arg * arg
 
 let arg_reg_order = List.map (fun r -> Reg(r))
     [ RDI; RSI; RDX; RCX; R8; R9 ]
@@ -171,8 +177,16 @@ let rec instr_to_x86 instr instr_ty =
     | _ -> failwith (sprintf "NYI: instr_to_x86 size %s" (ExtLib.dump instr_ty)) in
   match instr with
   | Assign(dest, typ, src_instr) ->
-    instr_to_x86 src_instr (Some(typ)) @
-    [ IMov(Sized(size, get_arg_val dest), Sized(size, Reg(RAX))) ]
+    let mov_to_dest = match typ with
+    | BaseTy(S) -> [ IMovSs(Sized(DWORD_PTR, get_arg_val dest),
+                            SSEReg(Xmm0)) ]
+    | BaseTy(D) ->
+      [ IMovSd(Sized(QWORD_PTR, get_arg_val dest),
+               SSEReg(Xmm0)) ]
+    | _ -> [ IMov(Sized(size, get_arg_val dest),
+                  Sized(size, Reg(RAX))) ] in
+    instr_to_x86 src_instr (Some(typ)) @ mov_to_dest
+
   | Instr1(op, arg) ->
     begin
       match op with
@@ -221,6 +235,46 @@ let rec instr_to_x86 instr instr_ty =
         let addr = get_arg_val arg in
         [ IMov(Reg(RAX), addr);
           IMovSx(Reg(RAX), Sized(BYTE_PTR, RegOffset(0, RAX)))]
+      (* Conversions *)
+      | "extsw" ->
+        let addr = get_arg_val arg in
+        [
+          IMovSx(Reg(RAX), addr);
+        ]
+      | "extuw" ->
+        let addr = get_arg_val arg in
+        [
+          IMov(Sized(DWORD_PTR, Reg(RAX)),
+               Sized(DWORD_PTR, addr));
+        ]
+      | "extsh"| "extuh" | "extsb" | "extub" -> failwith "NYI"
+      | "exts" ->
+        [
+          ICvtSs2Sd(SSEReg(Xmm0), get_arg_val arg);
+        ]
+      | "truncd" ->
+        [
+          ICvtSd2Ss(SSEReg(Xmm0), get_arg_val arg);
+        ]
+      | "stosi" ->
+        [
+          ICvtSs2Si(Sized(size, Reg(RAX)), get_arg_val arg);
+        ]
+      | "dtosi" ->
+        [
+          ICvtSd2Si(Sized(size, Reg(RAX)), get_arg_val arg);
+        ]
+      | "swtof" | "sltof" ->
+        begin
+          match instr_ty with
+          | Some(BaseTy(S)) -> [
+              ICvtSi2Ss(SSEReg(Xmm0), get_arg_val arg);
+            ]
+          | Some(BaseTy(D)) -> [
+              ICvtSi2Sd(SSEReg(Xmm0), get_arg_val arg);
+            ]
+          | _ -> failwith "swtof: expected single or double precision float"
+        end
       | _ -> failwith "NYI"
     end
   | Instr2(op, arg1, arg2) ->
@@ -556,6 +610,9 @@ let assign_homes (block: instruction list)
     let dest_loc = find_loc dest in
     let src_loc = find_loc src in
     (Sized(ds, dest_loc), Sized(ss, src_loc))
+  | dest, Sized(ss, Var(src)) ->
+    let src_loc = find_loc src in
+    (dest, Sized(ss, src_loc))
     
   | Var(dest), src ->
     let dest_loc = find_loc dest in
@@ -580,6 +637,29 @@ let assign_homes (block: instruction list)
     | IMov(d, s) ->
       let (new_dest, new_src) = replace_instr2_args_with_locs (d, s) in
       IMov(new_dest, new_src)
+    | IMovSx(d, s) ->
+      let (new_dest, new_src) = replace_instr2_args_with_locs (d, s) in
+      IMovSx(new_dest, new_src)
+
+    | ICvtSs2Sd(d, s) ->
+      let (new_dest, new_src) = replace_instr2_args_with_locs (d, s) in
+      ICvtSs2Sd(new_dest, new_src)
+    | ICvtSd2Ss(d, s) ->
+      let (new_dest, new_src) = replace_instr2_args_with_locs (d, s) in
+      ICvtSd2Ss(new_dest, new_src)
+    | ICvtSs2Si(d, s) ->
+      let (new_dest, new_src) = replace_instr2_args_with_locs (d, s) in
+      ICvtSs2Si(new_dest, new_src)
+    | ICvtSd2Si(d, s) ->
+      let (new_dest, new_src) = replace_instr2_args_with_locs (d, s) in
+      ICvtSd2Si(new_dest, new_src)
+    | ICvtSi2Ss(d, s) ->
+      let (new_dest, new_src) = replace_instr2_args_with_locs (d, s) in
+      ICvtSi2Ss(new_dest, new_src)
+    | ICvtSi2Sd(d, s) ->
+      let (new_dest, new_src) = replace_instr2_args_with_locs (d, s) in
+      ICvtSi2Sd(new_dest, new_src)
+
     | IAdd(d, s) ->
       let (new_dest, new_src) = replace_instr2_args_with_locs (d, s) in
       IAdd(new_dest, new_src)
@@ -789,6 +869,19 @@ let i_to_asm (i : instruction) : string =
       sprintf "  comiss %s, %s" (arg_to_asm left) (arg_to_asm right)
     | IComiSd(left, right) ->
       sprintf "  comisd %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | ICvtSs2Sd(left, right) ->
+      sprintf "  cvtss2sd %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | ICvtSd2Ss(left, right) ->
+      sprintf "  cvtsd2ss %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | ICvtSs2Si(left, right) ->
+      sprintf "  cvtss2si %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | ICvtSd2Si(left, right) ->
+      sprintf "  cvtsd2si %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | ICvtSi2Ss(left, right) ->
+      sprintf "  cvtsi2ss %s, %s" (arg_to_asm left) (arg_to_asm right)
+    | ICvtSi2Sd(left, right) ->
+      sprintf "  cvtsi2sd %s, %s" (arg_to_asm left) (arg_to_asm right)
+
 
     | IRet ->
       let restore_callee_save_regs = (List.fold_left (fun acc r ->
@@ -820,7 +913,6 @@ let asm_of_func (func: qbe) (data_def_names: string list)  : string =
            | BaseTy(D) | BaseTy(S) ->
              begin
                let dest = List.hd sse_regs in
-               print_endline (sprintf "%s" (ExtLib.dump dest));
                Hashtbl.add mappings (get_ident_name arg) dest;
                (gen_regs, List.tl sse_regs)
              end
