@@ -5,6 +5,15 @@ x86-64 assembly as output.
 
 ## Usage
 
+You'll need the OCaml package manager `opam` installed. Using `opam`,
+you should install `utop`, `extlib` and `ounit`:
+
+```shell
+    opam install utop ounit extlib
+```
+
+Then, to build `sambe`:
+
 ```shell
     make
     ./sambe.native test.ssa output.s
