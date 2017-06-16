@@ -25,3 +25,4 @@
   what output it expects. When running the test suite, the test
   program gets linked to the driver and compared against the specified
   output.
+- Naming multiple blocks with the same name should cause an error.

@@ -16,4 +16,5 @@ let () =
 #load "qbe_lexer.cmo";;
 #load "qbe_parser.cmo";;
 #load "cfg.cmo";;
+#load "typecheck.cmo";;
 #load "x86.cmo";;

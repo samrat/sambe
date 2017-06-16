@@ -1024,6 +1024,8 @@ let compile_to_file ls oc =
   let (data_defs, type_defs, func_defs) = 
     segregate_toplevel_defs dessad in
   let (new_func_defs, additional_data_defs) = hoist_all_floats func_defs in
+  let typechecked = List.map Typecheck.typecheck_func new_func_defs in
+
   let data_defs = data_defs @ additional_data_defs in
   let data_def_names = List.map (fun data_def -> match data_def with
       | DataDef(_, GlobalIdent(name), _) -> name
