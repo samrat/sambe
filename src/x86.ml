@@ -157,11 +157,11 @@ let rec cmp_instr_to_x86 size cmp (arg1, arg2) =
                   Sized(DWORD_PTR, get_arg_val arg2));]
     | L -> [ ICmp(Sized(QWORD_PTR, get_arg_val arg1),
                   get_arg_val arg2);]
-    | S -> [ IMovSs(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
-             IMovSs(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+    | S -> [ IMovSs(SSEReg(Xmm0), (get_arg_val arg1));
+             IMovSs(SSEReg(Xmm1), (get_arg_val arg2));
              IComiSs(SSEReg(Xmm0), SSEReg(Xmm1)); ]
-    | D -> [ IMovSd(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
-             IMovSd(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+    | D -> [ IMovSd(SSEReg(Xmm0), (get_arg_val arg1));
+             IMovSd(SSEReg(Xmm1), (get_arg_val arg2));
              IComiSd(SSEReg(Xmm0), SSEReg(Xmm1)); ]
     | _ -> failwith "expected integer or float type"
   in
@@ -288,13 +288,13 @@ let rec instr_to_x86 instr instr_ty =
             [ IMov(Reg(RAX), get_arg_val arg1);
               IAdd(Reg(RAX), get_arg_val arg2); ]
           | Some(BaseTy(D)) ->
-            [ IMovSd(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
-              IMovSd(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+            [ IMovSd(SSEReg(Xmm0), get_arg_val arg1);
+              IMovSd(SSEReg(Xmm1), get_arg_val arg2);
               IAddSd(SSEReg(Xmm0), SSEReg(Xmm1));
             ]
           | Some(BaseTy(S)) ->
-            [ IMovSs(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
-              IMovSs(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+            [ IMovSs(SSEReg(Xmm0), get_arg_val arg1);
+              IMovSs(SSEReg(Xmm1), get_arg_val arg2);
               IAddSs(SSEReg(Xmm0), SSEReg(Xmm1));
             ]
           | _ -> failwith "NYI"
@@ -306,13 +306,13 @@ let rec instr_to_x86 instr instr_ty =
             [ IMov(Reg(RAX), get_arg_val arg1);
               ISub(Reg(RAX), get_arg_val arg2); ]
           | Some(BaseTy(D)) ->
-            [ IMovSd(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
-              IMovSd(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+            [ IMovSd(SSEReg(Xmm0), get_arg_val arg1);
+              IMovSd(SSEReg(Xmm1), get_arg_val arg2);
               ISubSd(SSEReg(Xmm0), SSEReg(Xmm1));
             ]
           | Some(BaseTy(S)) ->
-            [ IMovSs(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
-              IMovSs(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+            [ IMovSs(SSEReg(Xmm0), get_arg_val arg1);
+              IMovSs(SSEReg(Xmm1), get_arg_val arg2);
               ISubSs(SSEReg(Xmm0), SSEReg(Xmm1));
             ]
           | _ -> failwith "NYI"
@@ -324,13 +324,13 @@ let rec instr_to_x86 instr instr_ty =
             [ IMov(Reg(RAX), get_arg_val arg1);
               IMul(Reg(RAX), get_arg_val arg2); ]
           | Some(BaseTy(D)) ->
-            [ IMovSd(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
-              IMovSd(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+            [ IMovSd(SSEReg(Xmm0), get_arg_val arg1);
+              IMovSd(SSEReg(Xmm1), get_arg_val arg2);
               IMulSd(SSEReg(Xmm0), SSEReg(Xmm1));
             ]
           | Some(BaseTy(S)) ->
-            [ IMovSs(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
-              IMovSs(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+            [ IMovSs(SSEReg(Xmm0), get_arg_val arg1);
+              IMovSs(SSEReg(Xmm1), get_arg_val arg2);
               IMulSs(SSEReg(Xmm0), SSEReg(Xmm1));
             ]
           | _ -> failwith "NYI"
@@ -344,13 +344,13 @@ let rec instr_to_x86 instr instr_ty =
               ICdq;
               ISDiv(Reg(RBX)); ]
           | Some(BaseTy(D)) ->
-            [ IMovSd(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
-              IMovSd(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+            [ IMovSd(SSEReg(Xmm0), get_arg_val arg1);
+              IMovSd(SSEReg(Xmm1), get_arg_val arg2);
               IDivSd(SSEReg(Xmm0), SSEReg(Xmm1));
             ]
           | Some(BaseTy(S)) ->
-            [ IMovSs(SSEReg(Xmm0), VarOffset(0, (get_arg_val arg1)));
-              IMovSs(SSEReg(Xmm1), VarOffset(0, (get_arg_val arg2)));
+            [ IMovSs(SSEReg(Xmm0), get_arg_val arg1);
+              IMovSs(SSEReg(Xmm1), get_arg_val arg2);
               IDivSs(SSEReg(Xmm0), SSEReg(Xmm1));
             ]
           | _ -> failwith "NYI"
@@ -471,7 +471,12 @@ let rec instr_to_x86 instr instr_ty =
         [ IMov(Reg(RAX), dest);
           IMov(Sized(QWORD_PTR, RegOffset(0, RAX)), v) ]
       | "storel" -> failwith "NYI: storel"
-
+      | "stores" ->
+        let v = get_arg_val arg1 in
+        let dest = get_arg_val arg2 in
+        [ IMov(Reg(RAX), dest);
+          IMov(Sized(QWORD_PTR, RegOffset(0, RAX)), v)
+        ]
       | _ -> failwith (Printf.sprintf "NYI: instr_to_x86 %s" op)
     end
   | Instr3(op, arg1, arg2, arg3) ->
